@@ -1,0 +1,34 @@
+# .gitignore for SuiteCRM Extended
+
+# Environment files
+.env
+
+# Docker volumes
+suitecrm-data/
+db-data/
+
+# Backups
+backups/
+*.sql
+*.tar.gz
+
+# SuiteCRM specific
+cache/
+upload/
+custom/history/
+*.log
+
+# IDE
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Temporary files
+tmp/
+temp/

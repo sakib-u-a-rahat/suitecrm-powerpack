@@ -1,0 +1,45 @@
+<?php
+/**
+ * SuiteCRM Configuration Override Template
+ * 
+ * This file is copied to config_override.php during installation
+ * and populated with environment variables
+ */
+
+$sugar_config['dbconfig']['db_host_name'] = getenv('SUITECRM_DATABASE_HOST') ?: 'localhost';
+$sugar_config['dbconfig']['db_user_name'] = getenv('SUITECRM_DATABASE_USER') ?: 'suitecrm';
+$sugar_config['dbconfig']['db_password'] = getenv('SUITECRM_DATABASE_PASSWORD') ?: 'suitecrm';
+$sugar_config['dbconfig']['db_name'] = getenv('SUITECRM_DATABASE_NAME') ?: 'suitecrm';
+$sugar_config['dbconfig']['db_type'] = 'mysql';
+$sugar_config['dbconfig']['db_port'] = getenv('SUITECRM_DATABASE_PORT') ?: '3306';
+
+$sugar_config['site_url'] = getenv('SUITECRM_SITE_URL') ?: 'http://localhost:8080';
+
+// Twilio Integration Configuration
+$sugar_config['twilio_account_sid'] = getenv('TWILIO_ACCOUNT_SID') ?: '';
+$sugar_config['twilio_auth_token'] = getenv('TWILIO_AUTH_TOKEN') ?: '';
+$sugar_config['twilio_phone_number'] = getenv('TWILIO_PHONE_NUMBER') ?: '';
+$sugar_config['twilio_enable_click_to_call'] = true;
+$sugar_config['twilio_enable_auto_logging'] = true;
+$sugar_config['twilio_enable_recordings'] = true;
+
+// Enable developer mode for easier debugging
+$sugar_config['developerMode'] = false;
+
+// Log settings
+$sugar_config['logger']['level'] = 'fatal';
+$sugar_config['logger']['file']['ext'] = '.log';
+$sugar_config['logger']['file']['name'] = 'suitecrm';
+$sugar_config['logger']['file']['suffix'] = '';
+$sugar_config['logger']['file']['maxSize'] = '10MB';
+
+// Session settings
+$sugar_config['session_dir'] = '';
+
+// Performance settings
+$sugar_config['disable_count_query'] = true;
+$sugar_config['disable_vcr'] = true;
+$sugar_config['save_query'] = 'populate_only';
+
+// Security settings
+$sugar_config['verify_client_ip'] = true;

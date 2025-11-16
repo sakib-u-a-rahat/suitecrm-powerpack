@@ -1,0 +1,62 @@
+
+version: '3.8'
+
+services:
+  suitecrm:
+    build: .
+    container_name: suitecrm-extended
+    ports:
+      - "8080:80"
+    environment:
+      - SUITECRM_DATABASE_HOST=${SUITECRM_DATABASE_HOST:-db}
+      - SUITECRM_DATABASE_PORT=${SUITECRM_DATABASE_PORT:-3306}
+      - SUITECRM_DATABASE_NAME=${SUITECRM_DATABASE_NAME:-suitecrm}
+      - SUITECRM_DATABASE_USER=${SUITECRM_DATABASE_USER:-suitecrm}
+      - SUITECRM_DATABASE_PASSWORD=${SUITECRM_DATABASE_PASSWORD:-suitecrm}
+      - SUITECRM_SITE_URL=${SUITECRM_SITE_URL:-http://localhost:8080}
+      - TWILIO_ACCOUNT_SID=${TWILIO_ACCOUNT_SID:-}
+      - TWILIO_AUTH_TOKEN=${TWILIO_AUTH_TOKEN:-}
+      - TWILIO_PHONE_NUMBER=${TWILIO_PHONE_NUMBER:-}
+    volumes:
+      - suitecrm-data:/var/www/html
+      - ./custom-modules:/var/www/html/custom/modules
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
+    networks:
+      - suitecrm-network
+
+  # Optional: Uncomment if you want to use containerized database instead of external
+  # db:
+  #   image: mysql:8.0
+  #   container_name: suitecrm-db
+  #   command: --default-authentication-plugin=mysql_native_password
+  #   environment:
+  #     - MYSQL_ROOT_PASSWORD=${MYSQL_ROOT_PASSWORD:-rootpassword}
+  #     - MYSQL_DATABASE=${SUITECRM_DATABASE_NAME:-suitecrm}
+  #     - MYSQL_USER=${SUITECRM_DATABASE_USER:-suitecrm}
+  #     - MYSQL_PASSWORD=${SUITECRM_DATABASE_PASSWORD:-suitecrm}
+  #   volumes:
+  #     - db-data:/var/lib/mysql
+  #   networks:
+  #     - suitecrm-network
+
+  # Optional: Uncomment if using containerized database
+  # phpmyadmin:
+  #   image: phpmyadmin:latest
+  #   container_name: suitecrm-phpmyadmin
+  #   ports:
+  #     - "8081:80"
+  #   environment:
+  #     - PMA_HOST=${SUITECRM_DATABASE_HOST:-db}
+  #     - PMA_USER=${SUITECRM_DATABASE_USER:-suitecrm}
+  #     - PMA_PASSWORD=${SUITECRM_DATABASE_PASSWORD:-suitecrm}
+  #   networks:
+  #     - suitecrm-network
+
+volumes:
+  suitecrm-data:
+  # db-data:
+
+networks:
+  suitecrm-network:
+    driver: bridge
