@@ -8,15 +8,13 @@ RUN apt-get update && apt-get install -y \
     libzip-dev \
     libldap2-dev \
     libssl-dev \
-    libc-client-dev \
     libkrb5-dev \
     cron \
     git \
     unzip \
     curl \
     && docker-php-ext-configure gd --with-freetype --with-jpeg \
-    && docker-php-ext-configure imap --with-kerberos --with-imap-ssl \
-    && docker-php-ext-install -j$(nproc) gd pdo pdo_mysql mysqli zip imap ldap \
+    && docker-php-ext-install -j$(nproc) gd pdo pdo_mysql mysqli zip ldap \
     && a2enmod rewrite \
     && rm -rf /var/lib/apt/lists/*
 
