@@ -1,6 +1,6 @@
 FROM php:8.1-apache
 
-# Install system dependencies
+# Install system dependencies including mysql-client for database operations
 RUN apt-get update && apt-get install -y \
     libpng-dev \
     libjpeg-dev \
@@ -9,6 +9,8 @@ RUN apt-get update && apt-get install -y \
     libldap2-dev \
     libssl-dev \
     libkrb5-dev \
+    default-mysql-client \
+    ca-certificates \
     cron \
     git \
     unzip \
@@ -35,6 +37,31 @@ RUN curl -L -o suitecrm.zip https://github.com/salesagility/SuiteCRM/archive/ref
     && mv SuiteCRM-7.14.2/* . \
     && mv SuiteCRM-7.14.2/.* . 2>/dev/null || true \
     && rm -rf SuiteCRM-7.14.2 suitecrm.zip
+
+# Install Composer
+COPY --from=composer:latest /usr/bin/composer /usr/local/bin/composer
+
+# Install composer dependencies
+RUN if [ -f "composer.json" ]; then \
+        composer install --no-dev --optimize-autoloader --no-interaction || true; \
+    fi
+
+# Patch MysqliManager to handle sql_require_primary_key for managed databases
+RUN if [ -f "include/database/MysqliManager.php" ]; then \
+        sed -i '/public function connect(array $configOptions = null, $dieOnError = false)/,/^    }$/c\
+    public function connect(array $configOptions = null, $dieOnError = false)\
+    {\
+        $result = parent::connect($configOptions, $dieOnError);\
+        if ($result && $this->database) {\
+            try {\
+                $this->database->query("SET SESSION sql_require_primary_key = 0");\
+            } catch (Exception $e) {\
+                // Ignore if setting not supported\
+            }\
+        }\
+        return $result;\
+    }' include/database/MysqliManager.php; \
+    fi
 
 # Create required directories
 RUN mkdir -p custom/modules custom/Extension/application/Ext/Include \
