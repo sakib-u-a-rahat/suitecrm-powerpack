@@ -4,18 +4,18 @@ set -e
 echo "Installing SuiteCRM custom modules..."
 
 # Navigate to SuiteCRM directory
-cd /var/www/html
+cd /opt/bitnami/suitecrm
 
 # Function to install a module
 install_module() {
     MODULE_NAME=$1
-    MODULE_PATH="/var/www/html/custom/modules/${MODULE_NAME}"
+    MODULE_PATH="/opt/bitnami/suitecrm/custom/modules/${MODULE_NAME}"
     
     echo "Installing ${MODULE_NAME}..."
     
     if [ -d "$MODULE_PATH" ]; then
         # Copy module files
-        cp -r "$MODULE_PATH" "/var/www/html/modules/"
+        cp -r "$MODULE_PATH" "/opt/bitnami/suitecrm/modules/"
         
         # Run repair and rebuild
         php -r "
@@ -39,7 +39,7 @@ install_module "FunnelDashboard"
 
 # Create database tables
 echo "Creating database tables..."
-DB_PORT="${SUITECRM_DATABASE_PORT:-3306}"
+DB_PORT="${SUITECRM_DATABASE_PORT_NUMBER:-3306}"
 mysql -h"$SUITECRM_DATABASE_HOST" -P"$DB_PORT" -u"$SUITECRM_DATABASE_USER" -p"$SUITECRM_DATABASE_PASSWORD" "$SUITECRM_DATABASE_NAME" <<EOF
 
 -- Twilio Integration table
@@ -98,8 +98,8 @@ EOF
 
 echo "Database tables created successfully!"
 
-# Set permissions
-chown -R www-data:www-data /var/www/html
-chmod -R 755 /var/www/html
+# Set permissions (Bitnami uses daemon user with UID 1001)
+chown -R 1001:1001 /opt/bitnami/suitecrm || true
+chmod -R 755 /opt/bitnami/suitecrm || true
 
 echo "Module installation completed!"
