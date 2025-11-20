@@ -234,12 +234,36 @@ Now when you view a Contact or Lead:
 - 📞 **Call** button appears next to phone numbers
 - 💬 **SMS** button appears next to phone numbers
 
-### Step 4: Verify Setup
+### Step 4: Verify All Features
 
+**Twilio Integration (Call + SMS):**
 1. Open any Contact or Lead record
 2. Look for phone number fields
-3. You should see **📞 Call** and **💬 SMS** buttons
-4. Click to test (will use your Twilio account)
+3. You should see:
+   - **📞 Call** button - Click to initiate call via Twilio
+   - **💬 SMS** button - Click to send text message
+4. Click SMS button → Opens dialog to compose message
+5. Click Call button → Initiates phone call
+
+**Lead Journey Timeline:**
+1. Open any Contact or Lead record
+2. Click **"View Journey Timeline"** button at top
+3. Opens new window showing:
+   - All interactions (calls, emails, meetings)
+   - Site visits and LinkedIn clicks  
+   - Campaign touchpoints
+   - Filterable timeline
+4. Timeline updates automatically as new interactions occur
+
+**Funnel Dashboard:**
+1. Go to main menu → **Funnel Dashboard**
+2. Select category (lead source)
+3. Choose date range
+4. View:
+   - Visual funnel with all stages
+   - Conversion rates between stages
+   - Average time in each stage
+   - Top performing categories
 
 ## 🔍 Monitoring
 
