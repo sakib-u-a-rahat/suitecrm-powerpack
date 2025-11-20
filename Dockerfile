@@ -12,10 +12,6 @@ RUN mkdir -p /opt/bitnami/mysql/certs && \
     https://docs.digitalocean.com/_next/static/media/ca-certificate.0d9f5b78.crt \
     && chmod 644 /opt/bitnami/mysql/certs/ca-certificate.crt
 
-# Disable HTTPS vhost to prevent SSL certificate errors (use reverse proxy for SSL)
-RUN mv /opt/bitnami/apache/conf/vhosts/suitecrm-https-vhost.conf \
-       /opt/bitnami/apache/conf/vhosts/suitecrm-https-vhost.conf.disabled 2>/dev/null || true
-
 # Install additional dependencies
 RUN apt-get update && apt-get install -y \
     git \
@@ -47,12 +43,9 @@ RUN echo '<?php' > /opt/bitnami/suitecrm/config_override.php.template && \
     echo '$sugar_config["twilio_enable_recordings"] = true;' >> /opt/bitnami/suitecrm/config_override.php.template && \
     chown daemon:daemon /opt/bitnami/suitecrm/config_override.php.template
 
-# Switch to daemon user (Bitnami non-root user)
-USER 1001
-
 # Expose Bitnami default ports
 EXPOSE 8080 8443
 
-# Use custom entrypoint that wraps Bitnami's entrypoint
+# Use custom entrypoint that handles volume persistence
+# Note: Entrypoint runs as root to copy files, then Apache runs as daemon user
 ENTRYPOINT ["/opt/bitnami/scripts/suitecrm/powerpack-entrypoint.sh"]
-CMD ["/opt/bitnami/scripts/suitecrm/run.sh"]
