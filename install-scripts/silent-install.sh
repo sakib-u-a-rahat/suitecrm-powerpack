@@ -66,10 +66,20 @@ chown daemon:daemon /bitnami/suitecrm/public/legacy/config_si.php
 echo "Running silent installer..."
 
 # The legacy installer will detect config_si.php and auto-redirect to silent installation
-su -s /bin/bash daemon -c "cd /bitnami/suitecrm/public/legacy && php install.php"
+echo "Executing: cd /bitnami/suitecrm/public/legacy && php install.php"
+OUTPUT=$(su -s /bin/bash daemon -c "cd /bitnami/suitecrm/public/legacy && php install.php 2>&1")
+INSTALL_STATUS=$?
 
-if [ $? -eq 0 ]; then
+echo "$OUTPUT"
+
+if [ $INSTALL_STATUS -eq 0 ] && [ -f "/bitnami/suitecrm/config.php" ]; then
     echo "✅ SuiteCRM silent installation completed successfully!"
+    
+    # Clear cache and sessions
+    echo "Clearing cache and sessions..."
+    rm -rf /bitnami/suitecrm/cache/* 2>/dev/null || true
+    rm -rf /bitnami/suitecrm/public/legacy/cache/* 2>/dev/null || true
+    find /bitnami/suitecrm -type d -name "cache" -exec rm -rf {}/* \; 2>/dev/null || true
     
     # Apply Twilio configuration from environment
     if [ -f "/bitnami/suitecrm/config_override.php.template" ]; then
@@ -88,5 +98,7 @@ if [ $? -eq 0 ]; then
     exit 0
 else
     echo "❌ SuiteCRM installation failed"
+    echo "Installation output:"
+    echo "$OUTPUT"
     exit 1
 fi

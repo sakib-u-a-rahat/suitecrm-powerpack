@@ -14,6 +14,32 @@ if [ ! -f "/bitnami/suitecrm/public/index.php" ]; then
     touch /bitnami/suitecrm/.modules_pending
 fi
 
+# Auto-install SuiteCRM if database credentials are provided and not yet installed
+if [ ! -f "/bitnami/suitecrm/config.php" ] && [ -n "$SUITECRM_DATABASE_HOST" ] && [ "$SUITECRM_SKIP_INSTALL" != "yes" ]; then
+    echo "Database configured - running silent installation..."
+    
+    # Wait for database to be ready (simple TCP check)
+    echo "Waiting for database connection..."
+    for i in {1..30}; do
+        if timeout 2 bash -c "</dev/tcp/$SUITECRM_DATABASE_HOST/${SUITECRM_DATABASE_PORT_NUMBER:-3306}" 2>/dev/null; then
+            echo "✅ Database is ready!"
+            break
+        fi
+        echo "Waiting for database... ($i/30)"
+        sleep 2
+    done
+    
+    # Run silent installation
+    if /opt/bitnami/scripts/suitecrm/silent-install.sh; then
+        echo "✅ SuiteCRM installed successfully!"
+        # Remove pending flag since we'll install modules immediately after
+        rm -f /bitnami/suitecrm/.modules_pending
+    else
+        echo "⚠️  Silent installation failed. You can install manually at http://your-domain/install.php"
+        echo "⚠️  Or use: docker exec <container> suitecrm:app:install"
+    fi
+fi
+
 # Auto-install custom modules if SuiteCRM is installed and modules are pending
 if [ -f "/bitnami/suitecrm/config.php" ] && [ -f "/bitnami/suitecrm/.modules_pending" ]; then
     echo "SuiteCRM is installed - installing custom modules automatically..."

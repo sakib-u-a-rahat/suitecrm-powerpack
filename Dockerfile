@@ -24,9 +24,11 @@ COPY --chown=daemon:daemon custom-modules/TwilioIntegration /opt/bitnami/suitecr
 COPY --chown=daemon:daemon custom-modules/LeadJourney /opt/bitnami/suitecrm/modules/LeadJourney
 COPY --chown=daemon:daemon custom-modules/FunnelDashboard /opt/bitnami/suitecrm/modules/FunnelDashboard
 
-# Copy installation script
+# Copy installation scripts
 COPY install-scripts/install-modules.sh /opt/bitnami/scripts/suitecrm/install-modules.sh
-RUN chmod +x /opt/bitnami/scripts/suitecrm/install-modules.sh
+COPY install-scripts/silent-install.sh /opt/bitnami/scripts/suitecrm/silent-install.sh
+RUN chmod +x /opt/bitnami/scripts/suitecrm/install-modules.sh && \
+    chmod +x /opt/bitnami/scripts/suitecrm/silent-install.sh
 
 # Copy custom entrypoint
 COPY docker-entrypoint.sh /opt/bitnami/scripts/suitecrm/powerpack-entrypoint.sh

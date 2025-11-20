@@ -3,45 +3,79 @@ set -e
 
 echo "Installing SuiteCRM custom modules..."
 
-# Navigate to SuiteCRM directory
-cd /bitnami/suitecrm
+# Navigate to SuiteCRM legacy directory
+cd /bitnami/suitecrm/public/legacy
 
-# Function to install a module
-install_module() {
+# Function to register a module in SuiteCRM
+register_module() {
     MODULE_NAME=$1
     MODULE_PATH="/bitnami/suitecrm/modules/${MODULE_NAME}"
     
-    echo "Installing ${MODULE_NAME}..."
+    echo "Registering ${MODULE_NAME}..."
     
     if [ -d "$MODULE_PATH" ]; then
-        # Module already in place, just copy extensions
-        echo "Module files already in place for ${MODULE_NAME}"
+        # Register module using PHP
+        php -r "
+        define('sugarEntry', true);
+        chdir('/bitnami/suitecrm/public/legacy');
+        require_once('include/entryPoint.php');
+        
+        \$module = '${MODULE_NAME}';
+        
+        // Add module to system tabs
+        if (!isset(\$GLOBALS['moduleList'])) {
+            \$GLOBALS['moduleList'] = array();
+        }
+        if (!in_array(\$module, \$GLOBALS['moduleList'])) {
+            \$GLOBALS['moduleList'][] = \$module;
+        }
+        
+        // Register in module registry
+        \$beanList = array();
+        \$beanFiles = array();
+        if (file_exists('modules/{\$module}/{\$module}.php')) {
+            \$beanList[\$module] = \$module;
+            \$beanFiles[\$module] = 'modules/{\$module}/{\$module}.php';
+        }
+        
+        // Save configuration
+        require_once('modules/Administration/Administration.php');
+        \$admin = new Administration();
+        \$admin->saveSetting('system', 'moduleList', base64_encode(serialize(\$GLOBALS['moduleList'])));
+        
+        echo \"Module \$module registered\n\";
+        "
         
         # Copy extension files if they exist
         if [ -d "$MODULE_PATH/Extensions" ]; then
             echo "Installing ${MODULE_NAME} extensions..."
-            cp -r "$MODULE_PATH/Extensions/"* "/bitnami/suitecrm/custom/Extension/"
+            cp -r "$MODULE_PATH/Extensions/"* "/bitnami/suitecrm/custom/Extension/" 2>/dev/null || true
         fi
         
-        # Run repair and rebuild
-        php -r "
-        define('sugarEntry', true);
-        require_once('include/entryPoint.php');
-        require_once('modules/Administration/QuickRepairAndRebuild.php');
-        \$repair = new RepairAndClear();
-        \$repair->repairAndClearAll(['clearAll'], ['All'], false, false);
-        "
-        
-        echo "${MODULE_NAME} installed successfully!"
+        echo "${MODULE_NAME} registered successfully!"
     else
         echo "Module path not found: $MODULE_PATH"
     fi
 }
 
-# Install modules
-install_module "TwilioIntegration"
-install_module "LeadJourney"
-install_module "FunnelDashboard"
+# Register all modules
+register_module "TwilioIntegration"
+register_module "LeadJourney"
+register_module "FunnelDashboard"
+
+# Run Quick Repair and Rebuild
+echo "Running Quick Repair and Rebuild..."
+php -r "
+define('sugarEntry', true);
+chdir('/bitnami/suitecrm/public/legacy');
+require_once('include/entryPoint.php');
+require_once('modules/Administration/QuickRepairAndRebuild.php');
+
+\$repair = new RepairAndClear();
+\$repair->repairAndClearAll(['clearAll'], ['All'], false, false);
+
+echo \"Quick Repair completed\n\";
+"
 
 # Create database tables
 echo "Creating database tables..."
@@ -103,6 +137,12 @@ CREATE TABLE IF NOT EXISTS funnel_dashboard (
 EOF
 
 echo "Database tables created successfully!"
+
+# Clear cache after module installation
+echo "Clearing cache..."
+rm -rf /bitnami/suitecrm/cache/* 2>/dev/null || true
+rm -rf /bitnami/suitecrm/public/legacy/cache/* 2>/dev/null || true
+find /bitnami/suitecrm -type d -name "cache" -exec rm -rf {}/* \; 2>/dev/null || true
 
 # Set permissions (Bitnami uses daemon user with UID 1001)
 chown -R 1001:1001 /bitnami/suitecrm || true
