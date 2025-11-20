@@ -68,14 +68,45 @@ echo "Running silent installer..."
 # Create a PHP script to properly trigger the silent installation
 cat > /tmp/run_silent_install.php <<'PHPEOF'
 <?php
+// Start session to avoid redirect loop
+session_start();
+
+// Set up environment to look like web request
 $_SERVER['REQUEST_METHOD'] = 'GET';
 $_SERVER['HTTP_HOST'] = 'localhost';
+$_SERVER['SERVER_NAME'] = 'localhost';
+$_SERVER['SERVER_PORT'] = '8080';
 $_SERVER['REQUEST_URI'] = '/legacy/install.php?goto=SilentInstall&cli=true';
+$_SERVER['SCRIPT_NAME'] = '/legacy/install.php';
+$_SERVER['SCRIPT_FILENAME'] = '/bitnami/suitecrm/public/legacy/install.php';
+$_SERVER['PHP_SELF'] = '/legacy/install.php';
 $_GET['goto'] = 'SilentInstall';
 $_GET['cli'] = 'true';
 
+// Set the next_step to skip the redirect check
+$_SESSION['setup_site_admin_user_name'] = '';
+
 chdir('/bitnami/suitecrm/public/legacy');
+
+// Capture output buffer to prevent HTML output
+ob_start();
 include('/bitnami/suitecrm/public/legacy/install.php');
+$output = ob_get_clean();
+
+// Only show errors, not the HTML
+if (strpos($output, 'Fatal error') !== false || strpos($output, 'Warning') !== false) {
+    echo $output;
+}
+
+// Check if installation succeeded
+if (file_exists('/bitnami/suitecrm/config.php')) {
+    echo "Installation completed successfully\n";
+    exit(0);
+} else {
+    echo "Installation may have failed - config.php not found\n";
+    echo $output;
+    exit(1);
+}
 ?>
 PHPEOF
 
