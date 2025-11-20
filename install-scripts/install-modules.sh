@@ -9,13 +9,19 @@ cd /opt/bitnami/suitecrm
 # Function to install a module
 install_module() {
     MODULE_NAME=$1
-    MODULE_PATH="/opt/bitnami/suitecrm/custom/modules/${MODULE_NAME}"
+    MODULE_PATH="/ modules/${MODULE_NAME}"
     
     echo "Installing ${MODULE_NAME}..."
     
     if [ -d "$MODULE_PATH" ]; then
-        # Copy module files
+        # Copy module files to modules directory
         cp -r "$MODULE_PATH" "/opt/bitnami/suitecrm/modules/"
+        
+        # Copy extension files if they exist
+        if [ -d "$MODULE_PATH/Extensions" ]; then
+            echo "Installing ${MODULE_NAME} extensions..."
+            cp -r "$MODULE_PATH/Extensions/"* "/opt/bitnami/suitecrm/custom/Extension/"
+        fi
         
         # Run repair and rebuild
         php -r "

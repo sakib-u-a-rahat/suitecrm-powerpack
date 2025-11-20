@@ -195,11 +195,51 @@ server {
 
 ## 📖 Initial Setup
 
+### Step 1: Install SuiteCRM
+
 1. **Start container** with database credentials
 2. **Access web installer** at `http://your-domain:8080/install.php`
 3. **Complete installation** wizard with same database credentials
-4. **Configure Twilio** from Admin > Twilio Integration (optional)
-5. **Set up modules** and start using!
+4. **Log in** as admin
+
+### Step 2: Install Custom Modules
+
+The modules are pre-copied but need to be installed:
+
+```bash
+# Run the module installation script
+docker exec suitecrm /opt/bitnami/scripts/suitecrm/install-modules.sh
+```
+
+This will:
+- Install all three custom modules (Twilio, Lead Journey, Funnel Dashboard)
+- Create required database tables
+- Set up menu items
+- Enable features
+
+**After installation**, log out and log back in to see the new modules.
+
+### Step 3: Enable Click-to-Call/SMS Features
+
+1. Go to **Admin Panel** > **Twilio Integration**
+2. Click **Configuration**
+3. Enter your Twilio credentials:
+   - Account SID
+   - Auth Token  
+   - Phone Number
+4. **Enable Click-to-Call** checkbox ✅
+5. **Save Configuration**
+
+Now when you view a Contact or Lead:
+- 📞 **Call** button appears next to phone numbers
+- 💬 **SMS** button appears next to phone numbers
+
+### Step 4: Verify Setup
+
+1. Open any Contact or Lead record
+2. Look for phone number fields
+3. You should see **📞 Call** and **💬 SMS** buttons
+4. Click to test (will use your Twilio account)
 
 ## 🔍 Monitoring
 
