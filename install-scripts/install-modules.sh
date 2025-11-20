@@ -22,28 +22,39 @@ register_module() {
         
         \$module = '${MODULE_NAME}';
         
-        // Add module to system tabs
-        if (!isset(\$GLOBALS['moduleList'])) {
-            \$GLOBALS['moduleList'] = array();
-        }
-        if (!in_array(\$module, \$GLOBALS['moduleList'])) {
-            \$GLOBALS['moduleList'][] = \$module;
+        // Load current config
+        if (file_exists('config.php')) {
+            require_once('config.php');
         }
         
-        // Register in module registry
+        // Add module to system tabs if not already present
+        if (!isset(\$sugar_config['moduleList'])) {
+            \$sugar_config['moduleList'] = array();
+        }
+        if (!in_array(\$module, \$sugar_config['moduleList'])) {
+            \$sugar_config['moduleList'][] = \$module;
+        }
+        
+        // Register in bean registry
         \$beanList = array();
         \$beanFiles = array();
         if (file_exists('modules/{\$module}/{\$module}.php')) {
             \$beanList[\$module] = \$module;
             \$beanFiles[\$module] = 'modules/{\$module}/{\$module}.php';
+            
+            // Write to custom/modules registry
+            \$customDir = '../../custom/modules';
+            if (!file_exists(\$customDir)) {
+                mkdir(\$customDir, 0755, true);
+            }
         }
         
-        // Save configuration
+        // Enable module in display_modules
         require_once('modules/Administration/Administration.php');
         \$admin = new Administration();
-        \$admin->saveSetting('system', 'moduleList', base64_encode(serialize(\$GLOBALS['moduleList'])));
+        \$admin->saveSetting('system', 'display_modules', base64_encode(serialize(\$sugar_config['moduleList'])));
         
-        echo \"Module \$module registered\n\";
+        echo \"Module \$module registered and enabled\n\";
         "
         
         # Copy extension files if they exist

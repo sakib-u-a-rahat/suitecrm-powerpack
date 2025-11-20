@@ -28,8 +28,10 @@ COPY --chown=daemon:daemon custom-modules/FunnelDashboard /opt/bitnami/suitecrm/
 # Copy installation scripts
 COPY install-scripts/install-modules.sh /opt/bitnami/scripts/suitecrm/install-modules.sh
 COPY install-scripts/silent-install.sh /opt/bitnami/scripts/suitecrm/silent-install.sh
+COPY install-scripts/enable-modules-suite8.sh /opt/bitnami/scripts/suitecrm/enable-modules-suite8.sh
 RUN chmod +x /opt/bitnami/scripts/suitecrm/install-modules.sh && \
-    chmod +x /opt/bitnami/scripts/suitecrm/silent-install.sh
+    chmod +x /opt/bitnami/scripts/suitecrm/silent-install.sh && \
+    chmod +x /opt/bitnami/scripts/suitecrm/enable-modules-suite8.sh
 
 # Copy custom entrypoint
 COPY docker-entrypoint.sh /opt/bitnami/scripts/suitecrm/powerpack-entrypoint.sh

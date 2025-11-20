@@ -3,7 +3,7 @@ if(!defined('sugarEntry') || !sugarEntry) die('Not A Valid Entry Point');
 
 $manifest = array(
     'acceptable_sugar_versions' => array(
-        'regex_matches' => array('7\\..*'),
+        'regex_matches' => array('7\\..*', '8\\..*'),
     ),
     'acceptable_sugar_flavors' => array('CE', 'PRO', 'ENT'),
     'readme' => '',

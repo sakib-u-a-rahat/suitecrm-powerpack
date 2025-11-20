@@ -60,6 +60,10 @@ if [ -f "/bitnami/suitecrm/config.php" ] && [ -f "/bitnami/suitecrm/.modules_pen
     if /opt/bitnami/scripts/suitecrm/install-modules.sh; then
         rm -f /bitnami/suitecrm/.modules_pending
         echo "✅ Custom modules installed successfully!"
+        
+        # Enable modules in SuiteCRM 8 interface
+        echo "Enabling modules in SuiteCRM 8 interface..."
+        /opt/bitnami/scripts/suitecrm/enable-modules-suite8.sh || echo "Module enablement had warnings, continuing..."
     else
         echo "⚠️  Module installation failed. Will retry on next start."
     fi
