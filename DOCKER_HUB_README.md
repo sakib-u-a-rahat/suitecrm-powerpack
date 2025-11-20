@@ -200,24 +200,24 @@ server {
 1. **Start container** with database credentials
 2. **Access web installer** at `http://your-domain:8080/install.php`
 3. **Complete installation** wizard with same database credentials
-4. **Log in** as admin
+4. **Restart container** to trigger automatic module installation:
+   ```bash
+   docker restart suitecrm
+   ```
+5. **Wait 30 seconds** for modules to install automatically
+6. **Log in** as admin - modules are now available!
 
-### Step 2: Install Custom Modules
+### Step 2: Automatic Module Installation
 
-The modules are pre-copied but need to be installed:
+After SuiteCRM installation, the entrypoint automatically:
+- ✅ Detects when SuiteCRM is installed (checks for `config.php`)
+- ✅ Installs all three custom modules
+- ✅ Copies extension files for JavaScript and buttons
+- ✅ Creates database tables
+- ✅ Runs Quick Repair and Rebuild
+- ✅ Sets proper permissions
 
-```bash
-# Run the module installation script
-docker exec suitecrm /opt/bitnami/scripts/suitecrm/install-modules.sh
-```
-
-This will:
-- Install all three custom modules (Twilio, Lead Journey, Funnel Dashboard)
-- Create required database tables
-- Set up menu items
-- Enable features
-
-**After installation**, log out and log back in to see the new modules.
+**No manual intervention required!** Just restart the container after web installation.
 
 ### Step 3: Enable Click-to-Call/SMS Features
 
