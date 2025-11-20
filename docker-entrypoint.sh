@@ -9,6 +9,26 @@ if [ ! -f "/bitnami/suitecrm/public/index.php" ]; then
     cp -a /opt/bitnami/suitecrm/. /bitnami/suitecrm/
     chown -R daemon:daemon /bitnami/suitecrm
     echo "Files copied successfully"
+    
+    # Mark that modules need installation after SuiteCRM setup
+    touch /bitnami/suitecrm/.modules_pending
+fi
+
+# Auto-install custom modules if SuiteCRM is installed and modules are pending
+if [ -f "/bitnami/suitecrm/config.php" ] && [ -f "/bitnami/suitecrm/.modules_pending" ]; then
+    echo "SuiteCRM is installed - installing custom modules automatically..."
+    
+    # Wait a moment for database to be fully ready
+    sleep 3
+    
+    # Run module installation script
+    /opt/bitnami/scripts/suitecrm/install-modules.sh || echo "Module installation will be retried on next start"
+    
+    # Remove pending flag if successful
+    if [ $? -eq 0 ]; then
+        rm -f /bitnami/suitecrm/.modules_pending
+        echo "Custom modules installed successfully!"
+    fi
 fi
 
 # Disable HTTPS vhost since SSL is handled by reverse proxy

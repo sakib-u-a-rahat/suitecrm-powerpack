@@ -4,23 +4,23 @@ set -e
 echo "Installing SuiteCRM custom modules..."
 
 # Navigate to SuiteCRM directory
-cd /opt/bitnami/suitecrm
+cd /bitnami/suitecrm
 
 # Function to install a module
 install_module() {
     MODULE_NAME=$1
-    MODULE_PATH="/ modules/${MODULE_NAME}"
+    MODULE_PATH="/bitnami/suitecrm/modules/${MODULE_NAME}"
     
     echo "Installing ${MODULE_NAME}..."
     
     if [ -d "$MODULE_PATH" ]; then
-        # Copy module files to modules directory
-        cp -r "$MODULE_PATH" "/opt/bitnami/suitecrm/modules/"
+        # Module already in place, just copy extensions
+        echo "Module files already in place for ${MODULE_NAME}"
         
         # Copy extension files if they exist
         if [ -d "$MODULE_PATH/Extensions" ]; then
             echo "Installing ${MODULE_NAME} extensions..."
-            cp -r "$MODULE_PATH/Extensions/"* "/opt/bitnami/suitecrm/custom/Extension/"
+            cp -r "$MODULE_PATH/Extensions/"* "/bitnami/suitecrm/custom/Extension/"
         fi
         
         # Run repair and rebuild
@@ -105,7 +105,7 @@ EOF
 echo "Database tables created successfully!"
 
 # Set permissions (Bitnami uses daemon user with UID 1001)
-chown -R 1001:1001 /opt/bitnami/suitecrm || true
-chmod -R 755 /opt/bitnami/suitecrm || true
+chown -R 1001:1001 /bitnami/suitecrm || true
+chmod -R 755 /bitnami/suitecrm || true
 
 echo "Module installation completed!"
