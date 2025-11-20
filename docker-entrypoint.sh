@@ -7,12 +7,21 @@ echo "Starting SuiteCRM PowerPack..."
 if [ ! -f "/bitnami/suitecrm/public/index.php" ]; then
     echo "Copying SuiteCRM files to persistent volume..."
     cp -a /opt/bitnami/suitecrm/. /bitnami/suitecrm/
+    
+    # Create custom/Extension directory if it doesn't exist
+    mkdir -p /bitnami/suitecrm/custom/Extension
+    
     chown -R daemon:daemon /bitnami/suitecrm
     echo "Files copied successfully"
     
     # Mark that modules need installation after SuiteCRM setup
     touch /bitnami/suitecrm/.modules_pending
 fi
+
+# Fix session directory permissions
+echo "Setting session directory permissions..."
+chmod 777 /opt/bitnami/php/var/run/session 2>/dev/null || true
+chown -R daemon:daemon /opt/bitnami/php/var/run/session 2>/dev/null || true
 
 # Auto-install SuiteCRM if database credentials are provided and not yet installed
 if [ ! -f "/bitnami/suitecrm/config.php" ] && [ -n "$SUITECRM_DATABASE_HOST" ] && [ "$SUITECRM_SKIP_INSTALL" != "yes" ]; then

@@ -17,6 +17,7 @@ RUN apt-get update && apt-get install -y \
     git \
     curl \
     cron \
+    default-mysql-client \
     && rm -rf /var/lib/apt/lists/*
 
 # Copy custom modules and configurations

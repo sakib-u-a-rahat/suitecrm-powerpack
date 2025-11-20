@@ -3,8 +3,8 @@ set -e
 
 echo "Installing SuiteCRM custom modules..."
 
-# Navigate to SuiteCRM legacy directory
-cd /bitnami/suitecrm/public/legacy
+# Ensure custom/Extension directory exists
+mkdir -p /bitnami/suitecrm/custom/Extension
 
 # Function to register a module in SuiteCRM
 register_module() {
@@ -14,10 +14,10 @@ register_module() {
     echo "Registering ${MODULE_NAME}..."
     
     if [ -d "$MODULE_PATH" ]; then
-        # Register module using PHP
+        # Register module using PHP from correct directory
+        cd /bitnami/suitecrm/public/legacy
         php -r "
         define('sugarEntry', true);
-        chdir('/bitnami/suitecrm/public/legacy');
         require_once('include/entryPoint.php');
         
         \$module = '${MODULE_NAME}';
@@ -65,9 +65,8 @@ register_module "FunnelDashboard"
 
 # Run Quick Repair and Rebuild
 echo "Running Quick Repair and Rebuild..."
-php -r "
+cd /bitnami/suitecrm/public/legacy && php -r "
 define('sugarEntry', true);
-chdir('/bitnami/suitecrm/public/legacy');
 require_once('include/entryPoint.php');
 require_once('modules/Administration/QuickRepairAndRebuild.php');
 
@@ -80,7 +79,15 @@ echo \"Quick Repair completed\n\";
 # Create database tables
 echo "Creating database tables..."
 DB_PORT="${SUITECRM_DATABASE_PORT_NUMBER:-3306}"
-mysql -h"$SUITECRM_DATABASE_HOST" -P"$DB_PORT" -u"$SUITECRM_DATABASE_USER" -p"$SUITECRM_DATABASE_PASSWORD" "$SUITECRM_DATABASE_NAME" <<EOF
+
+# Check if SSL certificate exists and use it
+if [ -f "/opt/bitnami/mysql/certs/ca-certificate.crt" ]; then
+    SSL_MODE="--ssl-mode=REQUIRED --ssl-ca=/opt/bitnami/mysql/certs/ca-certificate.crt"
+else
+    SSL_MODE=""
+fi
+
+mysql -h"$SUITECRM_DATABASE_HOST" -P"$DB_PORT" -u"$SUITECRM_DATABASE_USER" -p"$SUITECRM_DATABASE_PASSWORD" $SSL_MODE "$SUITECRM_DATABASE_NAME" <<EOF
 
 -- Twilio Integration table
 CREATE TABLE IF NOT EXISTS twilio_integration (
@@ -144,8 +151,10 @@ rm -rf /bitnami/suitecrm/cache/* 2>/dev/null || true
 rm -rf /bitnami/suitecrm/public/legacy/cache/* 2>/dev/null || true
 find /bitnami/suitecrm -type d -name "cache" -exec rm -rf {}/* \; 2>/dev/null || true
 
-# Set permissions (Bitnami uses daemon user with UID 1001)
-chown -R 1001:1001 /bitnami/suitecrm || true
+# Set proper file permissions
+echo "Setting permissions..."
+chown -R daemon:daemon /bitnami/suitecrm || true
 chmod -R 755 /bitnami/suitecrm || true
+chmod 777 /opt/bitnami/php/var/run/session 2>/dev/null || true
 
 echo "Module installation completed!"
