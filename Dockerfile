@@ -12,6 +12,10 @@ RUN mkdir -p /opt/bitnami/mysql/certs && \
     https://docs.digitalocean.com/_next/static/media/ca-certificate.0d9f5b78.crt \
     && chmod 644 /opt/bitnami/mysql/certs/ca-certificate.crt
 
+# Disable HTTPS vhost to prevent SSL certificate errors (use reverse proxy for SSL)
+RUN mv /opt/bitnami/apache/conf/vhosts/suitecrm-https-vhost.conf \
+       /opt/bitnami/apache/conf/vhosts/suitecrm-https-vhost.conf.disabled 2>/dev/null || true
+
 # Install additional dependencies
 RUN apt-get update && apt-get install -y \
     git \
