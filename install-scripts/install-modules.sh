@@ -5,10 +5,26 @@ echo "============================================"
 echo "Installing SuiteCRM PowerPack Modules"
 echo "============================================"
 
+# Verify we're in the right place
+if [ ! -f "/bitnami/suitecrm/public/legacy/config.php" ]; then
+    echo "ERROR: SuiteCRM config.php not found. Is SuiteCRM installed?"
+    echo "Expected: /bitnami/suitecrm/public/legacy/config.php"
+    exit 1
+fi
+
+# Verify modules exist
+for MODULE in TwilioIntegration LeadJourney FunnelDashboard; do
+    if [ ! -f "/bitnami/suitecrm/modules/$MODULE/$MODULE.php" ]; then
+        echo "ERROR: Module $MODULE not found at /bitnami/suitecrm/modules/$MODULE/"
+        exit 1
+    fi
+    echo "✓ Found module: $MODULE"
+done
+
 # Change to SuiteCRM directory
 cd /bitnami/suitecrm/public/legacy || exit 1
 
-# Ensure custom directories exist
+echo ""
 echo "Creating custom directories..."
 mkdir -p /bitnami/suitecrm/custom/Extension/application/Ext/Include
 mkdir -p /bitnami/suitecrm/custom/Extension/modules
@@ -25,11 +41,21 @@ if [ -d "/bitnami/suitecrm/modules/TwilioIntegration/Extensions" ]; then
 fi
 
 # Register modules in SuiteCRM
+echo ""
 echo "Registering modules in SuiteCRM..."
 
 php -r "
+error_reporting(E_ALL);
+ini_set('display_errors', 1);
+
 define('sugarEntry', true);
 \$_SERVER['REQUEST_METHOD'] = 'GET';
+
+if (!file_exists('include/entryPoint.php')) {
+    echo \"ERROR: Cannot find include/entryPoint.php\n\";
+    exit(1);
+}
+
 require_once('include/entryPoint.php');
 
 global \$beanList, \$beanFiles, \$moduleList;
@@ -38,19 +64,25 @@ global \$beanList, \$beanFiles, \$moduleList;
 \$modules = array('TwilioIntegration', 'LeadJourney', 'FunnelDashboard');
 
 // Load current configuration
-if (file_exists('config.php')) {
-    require_once('config.php');
-    global \$sugar_config;
+if (!file_exists('config.php')) {
+    echo \"ERROR: config.php not found\n\";
+    exit(1);
 }
+
+require_once('config.php');
+global \$sugar_config;
 
 // Initialize arrays if needed
 if (!isset(\$sugar_config['moduleList'])) {
     \$sugar_config['moduleList'] = array();
+    echo \"Initializing module list\n\";
 }
+
+echo \"Current module count: \" . count(\$sugar_config['moduleList']) . \"\\n\";
 
 // Register each module
 foreach (\$modules as \$module) {
-    echo \"Registering module: \$module\n\";
+    echo \"\\nProcessing module: \$module\\n\";
     
     // Add to module list
     if (!in_array(\$module, \$sugar_config['moduleList'])) {
@@ -101,22 +133,43 @@ file_put_contents(\$customInclude, \$includeContent);
 echo \"Custom module registry created\n\";
 
 echo \"\\nAll modules registered successfully!\\n\";
-" || echo "Module registration had warnings but continuing..."
+echo \"Total modules now: \" . count(\$sugar_config['moduleList']) . \"\\n\";
+exit(0);
+" 
+
+if [ $? -ne 0 ]; then
+    echo "ERROR: Module registration failed!"
+    exit 1
+fi
+
+echo "✓ Module registration completed"
 
 # Run Quick Repair and Rebuild
 echo ""
 echo "Running Quick Repair and Rebuild..."
 php -r "
+error_reporting(E_ALL);
+ini_set('display_errors', 1);
+
 define('sugarEntry', true);
 \$_SERVER['REQUEST_METHOD'] = 'GET';
 require_once('include/entryPoint.php');
 require_once('modules/Administration/QuickRepairAndRebuild.php');
 
+echo \"Starting repair process...\\n\";
+
 \$repair = new RepairAndClear();
 \$repair->repairAndClearAll(['clearAll'], ['All'], false, false);
 
-echo \"Quick Repair completed successfully\n\";
-" || echo "Quick Repair had warnings but continuing..."
+echo \"Quick Repair completed successfully\\n\";
+exit(0);
+"
+
+if [ $? -ne 0 ]; then
+    echo "WARNING: Quick Repair had errors but continuing..."
+else
+    echo "✓ Quick Repair completed"
+fi
 
 # Create database tables
 echo ""

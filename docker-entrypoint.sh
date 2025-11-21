@@ -41,7 +41,24 @@ if [ ! -f "/bitnami/suitecrm/config.php" ] && [ -n "$SUITECRM_DATABASE_HOST" ] &
     # Run silent installation
     if /opt/bitnami/scripts/suitecrm/silent-install.sh; then
         echo "✅ SuiteCRM installed successfully!"
-        # Remove pending flag since we'll install modules immediately after
+        
+        # Install modules immediately after successful SuiteCRM installation
+        echo ""
+        echo "Installing PowerPack modules..."
+        sleep 2  # Brief pause for file system to settle
+        
+        if /opt/bitnami/scripts/suitecrm/install-modules.sh; then
+            echo "✅ Custom modules installed successfully!"
+            
+            # Enable modules in SuiteCRM 8 interface
+            echo "Enabling modules in SuiteCRM 8 interface..."
+            /opt/bitnami/scripts/suitecrm/enable-modules-suite8.sh || echo "Module enablement completed with warnings"
+        else
+            echo "⚠️  Module installation failed. You can install manually later."
+            touch /bitnami/suitecrm/.modules_pending
+        fi
+        
+        # Remove pending flag after attempt
         rm -f /bitnami/suitecrm/.modules_pending
     else
         echo "⚠️  Silent installation failed. You can install manually at http://your-domain/install.php"
@@ -51,7 +68,8 @@ fi
 
 # Auto-install custom modules if SuiteCRM is installed and modules are pending
 if [ -f "/bitnami/suitecrm/config.php" ] && [ -f "/bitnami/suitecrm/.modules_pending" ]; then
-    echo "SuiteCRM is installed - installing custom modules automatically..."
+    echo "Detected pending module installation..."
+    echo "Installing PowerPack modules..."
     
     # Wait a moment for everything to settle
     sleep 3
@@ -63,9 +81,10 @@ if [ -f "/bitnami/suitecrm/config.php" ] && [ -f "/bitnami/suitecrm/.modules_pen
         
         # Enable modules in SuiteCRM 8 interface
         echo "Enabling modules in SuiteCRM 8 interface..."
-        /opt/bitnami/scripts/suitecrm/enable-modules-suite8.sh || echo "Module enablement had warnings, continuing..."
+        /opt/bitnami/scripts/suitecrm/enable-modules-suite8.sh || echo "Module enablement completed with warnings"
     else
         echo "⚠️  Module installation failed. Will retry on next start."
+        echo "⚠️  Or run manually: docker exec <container> /opt/bitnami/scripts/suitecrm/install-modules.sh"
     fi
 fi
 
