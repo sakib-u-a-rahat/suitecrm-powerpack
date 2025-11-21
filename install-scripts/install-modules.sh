@@ -104,22 +104,34 @@ require_once('modules/Administration/Administration.php');
 
 // Update display modules
 \$admin->saveSetting('system', 'display_modules', base64_encode(serialize(\$sugar_config['moduleList'])));
-echo \"Display modules updated\n\";
+echo \"Display modules updated\\n\";
 
-// Enable modules in tab controller
-require_once('include/tabConfig.php');
-\$tabs = new TabController();
-\$systemTabs = \$tabs->get_system_tabs();
-
-foreach (\$modules as \$module) {
-    if (!isset(\$systemTabs[\$module])) {
-        \$systemTabs[\$module] = \$module;
-        echo \"Module \$module added to system tabs\n\";
+// Enable modules in tab controller - use safer method
+try {
+    require_once('include/tabConfig.php');
+    \$tabs = new TabController();
+    
+    // Get existing system tabs
+    \$systemTabs = \$tabs->get_system_tabs();
+    if (!is_array(\$systemTabs)) {
+        \$systemTabs = array();
     }
+    
+    foreach (\$modules as \$module) {
+        if (!isset(\$systemTabs[\$module])) {
+            \$systemTabs[\$module] = \$module;
+            echo \"Module \$module added to system tabs\\n\";
+        } else {
+            echo \"Module \$module already in system tabs\\n\";
+        }
+    }
+    
+    \$tabs->set_system_tabs(\$systemTabs);
+    echo \"System tabs updated\\n\";
+} catch (Exception \$e) {
+    echo \"Warning: TabController update failed: \" . \$e->getMessage() . \"\\n\";
+    echo \"Modules registered but may need manual tab configuration\\n\";
 }
-
-\$tabs->set_system_tabs(\$systemTabs);
-echo \"System tabs updated\n\";
 
 // Write to custom module registry
 \$customInclude = '../../custom/Extension/application/Ext/Include/powerpack_modules.php';
@@ -154,17 +166,46 @@ ini_set('display_errors', 1);
 define('sugarEntry', true);
 \$_SERVER['REQUEST_METHOD'] = 'GET';
 require_once('include/entryPoint.php');
-require_once('modules/Administration/QuickRepairAndRebuild.php');
 
-echo \"Starting repair process...\\n\";
-
-\$repair = new RepairAndClear();
-\$repair->repairAndClearAll(['clearAll'], ['All'], false, false);
-
-echo \"Quick Repair completed successfully\\n\";
-exit(0);
+try {
+    require_once('modules/Administration/QuickRepairAndRebuild.php');
+    
+    echo \"Starting repair process...\\n\";
+    
+    \$repair = new RepairAndClear();
+    \$repair->show_output = false;
+    
+    // Call repair methods individually to avoid parameter issues
+    \$repair->clearVardefs();
+    \$repair->clearJsLangFiles();
+    \$repair->clearDashlets();
+    \$repair->clearSugarFeedCache();
+    \$repair->clearThemeCache();
+    \$repair->clearJsFiles();
+    \$repair->rebuildExtensions();
+    
+    echo \"Quick Repair completed successfully\\n\";
+    exit(0);
+} catch (Exception \$e) {
+    echo \"Warning: Quick Repair error: \" . \$e->getMessage() . \"\\n\";
+    echo \"Continuing anyway...\\n\";
+    exit(0);
+}
 "
 
+if [ $? -ne 0 ]; then
+    \$repair->rebuildExtensions();
+    
+    echo \"Quick Repair completed successfully\\n\";
+    exit(0);
+} catch (Exception \$e) {
+    echo \"Warning: Quick Repair error: \" . \$e->getMessage() . \"\\n\";
+    echo \"Continuing anyway...\\n\";
+    exit(0);
+}
+"
+
+if [ $? -ne 0 ]; then
 if [ $? -ne 0 ]; then
     echo "WARNING: Quick Repair had errors but continuing..."
 else
@@ -176,14 +217,20 @@ echo ""
 echo "Creating database tables..."
 DB_PORT="${SUITECRM_DATABASE_PORT_NUMBER:-3306}"
 
-# Check if SSL certificate exists
-if [ -f "/opt/bitnami/mysql/certs/ca-certificate.crt" ]; then
-    SSL_MODE="--ssl-mode=REQUIRED --ssl-ca=/opt/bitnami/mysql/certs/ca-certificate.crt"
+# Check if SSL certificate exists and database host requires SSL
+if [ -f "/opt/bitnami/mysql/certs/ca-certificate.crt" ] && [[ "$SUITECRM_DATABASE_HOST" == *"digitalocean.com"* ]]; then
+    SSL_OPTS="--ssl --ssl-ca=/opt/bitnami/mysql/certs/ca-certificate.crt"
+    echo "Using SSL connection to database..."
+elif [ -f "/opt/bitnami/mysql/certs/ca-certificate.crt" ]; then
+    # Try SSL but don't require it
+    SSL_OPTS="--ssl-ca=/opt/bitnami/mysql/certs/ca-certificate.crt"
+    echo "SSL certificate available, attempting SSL connection..."
 else
-    SSL_MODE=""
+    SSL_OPTS=""
+    echo "Using standard database connection..."
 fi
 
-mysql -h"$SUITECRM_DATABASE_HOST" -P"$DB_PORT" -u"$SUITECRM_DATABASE_USER" -p"$SUITECRM_DATABASE_PASSWORD" $SSL_MODE "$SUITECRM_DATABASE_NAME" <<'EOF'
+mysql -h"$SUITECRM_DATABASE_HOST" -P"$DB_PORT" -u"$SUITECRM_DATABASE_USER" -p"$SUITECRM_DATABASE_PASSWORD" $SSL_OPTS "$SUITECRM_DATABASE_NAME" <<'EOF'
 
 -- Twilio Integration table
 CREATE TABLE IF NOT EXISTS twilio_integration (
