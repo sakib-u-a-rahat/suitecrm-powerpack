@@ -83,7 +83,7 @@ class TwilioIntegrationViewMakecall extends SugarView {
         statusDiv.textContent = "Initiating call...";
         
         var formData = new FormData(this);
-        fetch("index.php?module=TwilioIntegration&action=makecall", {
+        fetch("legacy/index.php?module=TwilioIntegration&action=makecall", {
             method: "POST",
             body: formData
         })
@@ -91,7 +91,7 @@ class TwilioIntegrationViewMakecall extends SugarView {
         .then(function(data) {
             if (data.success) {
                 statusDiv.className = "status success";
-                statusDiv.textContent = "Call initiated successfully!";
+                statusDiv.textContent = "Call initiated successfully! Call SID: " + data.call_sid;
             } else {
                 statusDiv.className = "status error";
                 statusDiv.textContent = "Error: " + (data.error || "Failed to initiate call");
