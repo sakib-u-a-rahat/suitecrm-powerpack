@@ -60,11 +60,12 @@ Then:
 ## 📦 What's Included
 
 ### 1. 🔔 Twilio Integration
-- **Click-to-Call** from any phone number field
-- **Click-to-Text (SMS)** with interactive dialog
+- **Click-to-Call** from any phone number field in SuiteCRM 8 Angular UI
+- **Click-to-SMS** buttons next to all phone numbers
 - **Auto-Logging** of all calls and messages
 - **Call Recordings** stored in SuiteCRM
 - **UI Configuration** - Set up from admin panel
+- **Works in List & Detail Views** - Leads, Contacts, and more
 
 ### 2. 📊 Lead Journey Timeline
 - **Unified View** of all customer interactions
@@ -272,13 +273,17 @@ Now when you view a Contact or Lead:
 ### Step 4: Verify All Features
 
 **Twilio Integration (Call + SMS):**
-1. Open any Contact or Lead record
+1. Open any Contact or Lead list view or detail record
 2. Look for phone number fields
 3. You should see:
    - **📞 Call** button - Click to initiate call via Twilio
    - **💬 SMS** button - Click to send text message
 4. Click SMS button → Opens dialog to compose message
 5. Click Call button → Initiates phone call
+6. Buttons appear automatically next to all phone numbers in:
+   - List views (Leads, Contacts)
+   - Detail/record views
+   - Any page with phone fields
 
 **Lead Journey Timeline:**
 1. Open any Contact or Lead record
@@ -381,11 +386,25 @@ docker exec suitecrm mysqldump \
 
 ## 🏷️ Tags
 
-- `latest`, `2`, `2.0`, `v2.0.0` - Current stable release (Bitnami-based)
-- `1`, `1.1`, `v1.1.0` - Previous release (custom PHP 8.1 build)
+- `latest`, `2.2.2` - Current stable release with enhanced click-to-call
+- `2.2.1` - Click-to-call for SuiteCRM 8 Angular UI
+- `2.2.0` - Module enablement fixes
+- `2.0.0` - Bitnami-based release
 
-## 📝 Version 2.0.0 Changes
+## 📝 Changelog
 
+### Version 2.2.2 (Latest)
+- ✅ **Enhanced click-to-call** - Now works in Leads/Contacts list AND detail views
+- ✅ **SuiteCRM 8 Angular components** - Detects scrm-field, scrm-list-view-table-body
+- ✅ **Multiple phone field support** - phone_work, phone_mobile, phone_home, etc.
+- ✅ **Better phone extraction** - Handles international formats and mixed content
+
+### Version 2.2.1
+- ✅ Added click-to-call/SMS buttons for SuiteCRM 8 Angular UI
+- ✅ MutationObserver for Angular SPA navigation
+- ✅ Duplicate button prevention
+
+### Version 2.0.0
 - ✅ Migrated to **Bitnami SuiteCRM base** for production stability
 - ✅ **Volume persistence** with automatic file copying on first run
 - ✅ **DigitalOcean SSL** support with pre-installed CA certificate
