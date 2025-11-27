@@ -33,8 +33,25 @@ if [ ! -f "/bitnami/suitecrm/public/index.php" ]; then
     mkdir -p /bitnami/suitecrm/public/legacy/cache/smarty/cache
     mkdir -p /bitnami/suitecrm/public/legacy/upload
     mkdir -p /bitnami/suitecrm/public/legacy/custom
+    mkdir -p /bitnami/suitecrm/public/legacy/custom/include
+    mkdir -p /bitnami/suitecrm/public/legacy/custom/themes/suite8/tpls
     mkdir -p /bitnami/suitecrm/public/legacy/data
     mkdir -p /bitnami/suitecrm/public/legacy/modules
+    
+    # Copy custom extensions (click-to-call JS for Angular UI)
+    echo "Copying custom extensions..."
+    if [ -f "/opt/bitnami/suitecrm/dist/twilio-click-to-call.js" ]; then
+        echo "Installing Twilio click-to-call script for Angular UI..."
+        cp /opt/bitnami/suitecrm/dist/twilio-click-to-call.js /bitnami/suitecrm/public/dist/
+        
+        # Inject script tag into index.html if not already present
+        if [ -f "/bitnami/suitecrm/public/dist/index.html" ]; then
+            if ! grep -q "twilio-click-to-call.js" /bitnami/suitecrm/public/dist/index.html; then
+                echo "Injecting click-to-call script into Angular UI..."
+                sed -i 's|</body>|<script src="dist/twilio-click-to-call.js"></script>\n</body>|' /bitnami/suitecrm/public/dist/index.html
+            fi
+        fi
+    fi
     
     # Set ownership and permissions
     echo "Setting ownership and permissions..."

@@ -11,6 +11,13 @@ $dictionary['FunnelDashboard'] = array(
             'type' => 'varchar',
             'len' => '255',
         ),
+        'value' => array(
+            'name' => 'value',
+            'vname' => 'LBL_VALUE',
+            'type' => 'currency',
+            'dbType' => 'decimal',
+            'len' => '26,6',
+        ),
         'funnel_config' => array(
             'name' => 'funnel_config',
             'vname' => 'LBL_FUNNEL_CONFIG',
@@ -21,4 +28,4 @@ $dictionary['FunnelDashboard'] = array(
     'indices' => array(),
 );
 
-VardefManager::createVardef('FunnelDashboard', 'FunnelDashboard', array('basic'));
+VardefManager::createVardef('FunnelDashboard', 'FunnelDashboard', array('basic', 'assignable'));

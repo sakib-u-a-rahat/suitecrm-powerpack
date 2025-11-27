@@ -19,6 +19,9 @@ COPY --chown=daemon:daemon custom-modules/TwilioIntegration /opt/bitnami/suitecr
 COPY --chown=daemon:daemon custom-modules/LeadJourney /opt/bitnami/suitecrm/modules/LeadJourney
 COPY --chown=daemon:daemon custom-modules/FunnelDashboard /opt/bitnami/suitecrm/modules/FunnelDashboard
 
+# Copy custom extensions (click-to-call JS for Angular UI)
+COPY --chown=daemon:daemon config/custom-extensions/dist/twilio-click-to-call.js /opt/bitnami/suitecrm/dist/twilio-click-to-call.js
+
 # Copy installation scripts
 COPY install-scripts/install-modules.sh /opt/bitnami/scripts/suitecrm/install-modules.sh
 COPY install-scripts/silent-install.sh /opt/bitnami/scripts/suitecrm/silent-install.sh

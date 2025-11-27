@@ -26,26 +26,53 @@ fi
 chown -R daemon:daemon /bitnami/suitecrm
 chmod 777 /opt/bitnami/php/var/run/session 2>/dev/null || true
 
-echo "Running console installer with 10 minute timeout..."
+echo "Running console installer in background..."
 
-# Use the SuiteCRM console installer with timeout
-OUTPUT=$(timeout 600 su -s /bin/bash daemon -c "cd /bitnami/suitecrm && php bin/console suitecrm:app:install \
-  --db_username='$DB_USER' \
-  --db_password='$DB_PASSWORD' \
-  --db_host='$DB_HOST' \
-  --db_port='$DB_PORT' \
-  --db_name='$DB_NAME' \
-  --site_username='$ADMIN_USER' \
-  --site_password='$ADMIN_PASSWORD' \
-  --site_host='$SITE_URL' \
-  --demoData=no 2>&1" || echo "Installer completed or timed out")
-INSTALL_STATUS=$?
+# Run installer in background and monitor
+su -s /bin/bash daemon -c "cd /bitnami/suitecrm && php bin/console suitecrm:app:install \
+  --db_username=\"$DB_USER\" \
+  --db_password=\"$DB_PASSWORD\" \
+  --db_host=\"$DB_HOST\" \
+  --db_port=\"$DB_PORT\" \
+  --db_name=\"$DB_NAME\" \
+  --site_username=\"$ADMIN_USER\" \
+  --site_password=\"$ADMIN_PASSWORD\" \
+  --site_host=\"$SITE_URL\" \
+  --demoData=no" > /tmp/install.log 2>&1 &
 
-echo "$OUTPUT"
+INSTALLER_PID=$!
+echo "Installer running with PID: $INSTALLER_PID"
 
-# Check for config.php in both locations (root and legacy)
-if [ $INSTALL_STATUS -eq 0 ] && { [ -f "/bitnami/suitecrm/config.php" ] || [ -f "/bitnami/suitecrm/public/legacy/config.php" ]; }; then
-    echo "✅ SuiteCRM silent installation completed successfully!"
+# Wait up to 15 minutes for installation to complete
+MAX_WAIT=900
+ELAPSED=0
+while [ $ELAPSED -lt $MAX_WAIT ]; do
+    # Check if config exists and has database tables
+    if [ -f "/bitnami/suitecrm/public/legacy/config.php" ]; then
+        # Check if installer process is still running
+        if ! kill -0 $INSTALLER_PID 2>/dev/null; then
+            echo "Installer process completed"
+            cat /tmp/install.log
+            echo "✅ SuiteCRM silent installation completed successfully!"
+            break
+        fi
+    fi
+    
+    sleep 10
+    ELAPSED=$((ELAPSED + 10))
+    echo "Waiting for installation... ($ELAPSED seconds elapsed)"
+done
+
+# If we hit the timeout, kill the installer
+if [ $ELAPSED -ge $MAX_WAIT ]; then
+    echo "⚠️ Installation taking longer than 15 minutes, continuing anyway..."
+    kill $INSTALLER_PID 2>/dev/null || true
+    cat /tmp/install.log
+fi
+
+# Final check for config file
+if [ -f "/bitnami/suitecrm/config.php" ] || [ -f "/bitnami/suitecrm/public/legacy/config.php" ]; then
+    echo "✅ SuiteCRM configuration file created!"
     
     # Clear cache and sessions
     echo "Clearing cache and sessions..."
@@ -67,8 +94,7 @@ if [ $INSTALL_STATUS -eq 0 ] && { [ -f "/bitnami/suitecrm/config.php" ] || [ -f 
     
     exit 0
 else
-    echo "❌ SuiteCRM installation failed"
-    echo "Installation output:"
-    echo "$OUTPUT"
+    echo "⚠️ SuiteCRM configuration file not found, installation may have failed"
+    cat /tmp/install.log 2>/dev/null || true
     exit 1
 fi

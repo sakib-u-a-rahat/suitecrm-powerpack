@@ -26,197 +26,135 @@ cd /bitnami/suitecrm/public/legacy || exit 1
 
 echo ""
 echo "Creating custom directories..."
-mkdir -p /bitnami/suitecrm/custom/Extension/application/Ext/Include
-mkdir -p /bitnami/suitecrm/custom/Extension/modules
-mkdir -p /bitnami/suitecrm/custom/modules
+mkdir -p /bitnami/suitecrm/public/legacy/custom/Extension/application/Ext/Include
+mkdir -p /bitnami/suitecrm/public/legacy/custom/application/Ext/Include
+mkdir -p /bitnami/suitecrm/public/legacy/custom/Extension/modules
+mkdir -p /bitnami/suitecrm/public/legacy/custom/modules
 
-# Copy extension files
+# Copy module files to legacy directory
+echo "Copying module files to legacy directory..."
+for MODULE in TwilioIntegration LeadJourney FunnelDashboard; do
+    if [ -d "/bitnami/suitecrm/modules/$MODULE" ]; then
+        echo "  Copying $MODULE..."
+        cp -r "/bitnami/suitecrm/modules/$MODULE" "/bitnami/suitecrm/public/legacy/modules/"
+        chown -R daemon:daemon "/bitnami/suitecrm/public/legacy/modules/$MODULE"
+    fi
+done
+
+# Copy extension files for modules
 echo "Installing module extensions..."
+mkdir -p /bitnami/suitecrm/public/legacy/custom/Extension/application/Ext/Language
+
 if [ -d "/bitnami/suitecrm/modules/LeadJourney/Extensions" ]; then
-    cp -r /bitnami/suitecrm/modules/LeadJourney/Extensions/* /bitnami/suitecrm/custom/Extension/ 2>/dev/null || true
+    cp -r /bitnami/suitecrm/modules/LeadJourney/Extensions/* /bitnami/suitecrm/public/legacy/custom/Extension/ 2>/dev/null || true
 fi
 
 if [ -d "/bitnami/suitecrm/modules/TwilioIntegration/Extensions" ]; then
-    cp -r /bitnami/suitecrm/modules/TwilioIntegration/Extensions/* /bitnami/suitecrm/custom/Extension/ 2>/dev/null || true
+    cp -r /bitnami/suitecrm/modules/TwilioIntegration/Extensions/* /bitnami/suitecrm/public/legacy/custom/Extension/ 2>/dev/null || true
 fi
 
-# Register modules in SuiteCRM
+# Create compiled language extension for dropdown lists
+mkdir -p /bitnami/suitecrm/public/legacy/custom/application/Ext/Language
+cat > /bitnami/suitecrm/public/legacy/custom/application/Ext/Language/en_us.lang.ext.php << 'PHPEOF'
+<?php
+// Touchpoint types for Lead Journey module
+$app_list_strings['touchpoint_type_list'] = array(
+    '' => '',
+    'call' => 'Call',
+    'email' => 'Email',
+    'meeting' => 'Meeting',
+    'site_visit' => 'Site Visit',
+    'linkedin_click' => 'LinkedIn Click',
+    'campaign' => 'Campaign',
+    'form_submission' => 'Form Submission',
+    'download' => 'Download',
+    'webinar' => 'Webinar',
+    'trade_show' => 'Trade Show',
+    'referral' => 'Referral',
+    'other' => 'Other',
+);
+
+// Parent type options for Lead Journey
+$app_list_strings['lead_journey_parent_type_list'] = array(
+    'Leads' => 'Lead',
+    'Contacts' => 'Contact',
+    'Accounts' => 'Account',
+    'Opportunities' => 'Opportunity',
+);
+PHPEOF
+
+# Create module registration files directly
 echo ""
 echo "Registering modules in SuiteCRM..."
 
-php -r "
-error_reporting(E_ALL);
-ini_set('display_errors', 1);
+# Create the source extension file
+cat > /bitnami/suitecrm/public/legacy/custom/Extension/application/Ext/Include/powerpack_modules.php << 'PHPEOF'
+<?php
+// PowerPack Module Registration
+$beanList['TwilioIntegration'] = 'TwilioIntegration';
+$beanFiles['TwilioIntegration'] = 'modules/TwilioIntegration/TwilioIntegration.php';
+$moduleList[] = 'TwilioIntegration';
 
-define('sugarEntry', true);
-\$_SERVER['REQUEST_METHOD'] = 'GET';
+$beanList['LeadJourney'] = 'LeadJourney';
+$beanFiles['LeadJourney'] = 'modules/LeadJourney/LeadJourney.php';
+$moduleList[] = 'LeadJourney';
 
-if (!file_exists('include/entryPoint.php')) {
-    echo \"ERROR: Cannot find include/entryPoint.php\n\";
-    exit(1);
-}
+$beanList['FunnelDashboard'] = 'FunnelDashboard';
+$beanFiles['FunnelDashboard'] = 'modules/FunnelDashboard/FunnelDashboard.php';
+$moduleList[] = 'FunnelDashboard';
+PHPEOF
 
-require_once('include/entryPoint.php');
+# Create the compiled extension file - SuiteCRM loads modules.ext.php (not Include.ext.php)
+cat > /bitnami/suitecrm/public/legacy/custom/application/Ext/Include/modules.ext.php << 'PHPEOF'
+<?php
+// PowerPack Module Registration - Compiled
+$beanList['TwilioIntegration'] = 'TwilioIntegration';
+$beanFiles['TwilioIntegration'] = 'modules/TwilioIntegration/TwilioIntegration.php';
+$moduleList[] = 'TwilioIntegration';
 
-global \$beanList, \$beanFiles, \$moduleList;
+$beanList['LeadJourney'] = 'LeadJourney';
+$beanFiles['LeadJourney'] = 'modules/LeadJourney/LeadJourney.php';
+$moduleList[] = 'LeadJourney';
 
-// Define modules to install
-\$modules = array('TwilioIntegration', 'LeadJourney', 'FunnelDashboard');
+$beanList['FunnelDashboard'] = 'FunnelDashboard';
+$beanFiles['FunnelDashboard'] = 'modules/FunnelDashboard/FunnelDashboard.php';
+$moduleList[] = 'FunnelDashboard';
+PHPEOF
 
-// Load current configuration
-if (!file_exists('config.php')) {
-    echo \"ERROR: config.php not found\n\";
-    exit(1);
-}
-
-require_once('config.php');
-global \$sugar_config;
-
-// Initialize arrays if needed
-if (!isset(\$sugar_config['moduleList'])) {
-    \$sugar_config['moduleList'] = array();
-    echo \"Initializing module list\n\";
-}
-
-echo \"Current module count: \" . count(\$sugar_config['moduleList']) . \"\\n\";
-
-// Register each module
-foreach (\$modules as \$module) {
-    echo \"\\nProcessing module: \$module\\n\";
-    
-    // Add to module list
-    if (!in_array(\$module, \$sugar_config['moduleList'])) {
-        \$sugar_config['moduleList'][] = \$module;
-        echo \"  Added to moduleList\n\";
-    }
-    
-    // Register in bean list
-    if (!isset(\$beanList[\$module])) {
-        \$beanList[\$module] = \$module;
-        \$beanFiles[\$module] = 'modules/' . \$module . '/' . \$module . '.php';
-        echo \"  Added to beanList\n\";
-    }
-}
-
-// Save configuration using Administration
-require_once('modules/Administration/Administration.php');
-\$admin = new Administration();
-
-// Update display modules
-\$admin->saveSetting('system', 'display_modules', base64_encode(serialize(\$sugar_config['moduleList'])));
-echo \"Display modules updated\\n\";
-
-// Enable modules in tab controller - use safer method
-try {
-    require_once('include/tabConfig.php');
-    \$tabs = new TabController();
-    
-    // Get existing system tabs
-    \$systemTabs = \$tabs->get_system_tabs();
-    if (!is_array(\$systemTabs)) {
-        \$systemTabs = array();
-    }
-    
-    foreach (\$modules as \$module) {
-        if (!isset(\$systemTabs[\$module])) {
-            \$systemTabs[\$module] = \$module;
-            echo \"Module \$module added to system tabs\\n\";
-        } else {
-            echo \"Module \$module already in system tabs\\n\";
-        }
-    }
-    
-    \$tabs->set_system_tabs(\$systemTabs);
-    echo \"System tabs updated\\n\";
-} catch (Exception \$e) {
-    echo \"Warning: TabController update failed: \" . \$e->getMessage() . \"\\n\";
-    echo \"Modules registered but may need manual tab configuration\\n\";
-}
-
-// Write to custom module registry
-\$customInclude = '../../custom/Extension/application/Ext/Include/powerpack_modules.php';
-\$includeContent = \"<?php\\n// PowerPack Module Registration\\n\";
-foreach (\$modules as \$module) {
-    \$includeContent .= \"\\\$beanList['\$module'] = '\$module';\\n\";
-    \$includeContent .= \"\\\$beanFiles['\$module'] = 'modules/\$module/\$module.php';\\n\";
-    \$includeContent .= \"\\\$moduleList[] = '\$module';\\n\";
-}
-file_put_contents(\$customInclude, \$includeContent);
-echo \"Custom module registry created\n\";
-
-echo \"\\nAll modules registered successfully!\\n\";
-echo \"Total modules now: \" . count(\$sugar_config['moduleList']) . \"\\n\";
-exit(0);
-" 
-
-if [ $? -ne 0 ]; then
-    echo "ERROR: Module registration failed!"
-    exit 1
-fi
+chown -R daemon:daemon /bitnami/suitecrm/public/legacy/custom/
 
 echo "✓ Module registration completed"
 
-# Run Quick Repair and Rebuild
+# Clear cache to ensure new modules are loaded
 echo ""
-echo "Running Quick Repair and Rebuild..."
-php -r "
-error_reporting(E_ALL);
-ini_set('display_errors', 1);
-
-define('sugarEntry', true);
-\$_SERVER['REQUEST_METHOD'] = 'GET';
-require_once('include/entryPoint.php');
-
-try {
-    require_once('modules/Administration/QuickRepairAndRebuild.php');
-    
-    echo \"Starting repair process...\\n\";
-    
-    \$repair = new RepairAndClear();
-    \$repair->show_output = false;
-    
-    // Call repair methods individually to avoid parameter issues
-    \$repair->clearVardefs();
-    \$repair->clearJsLangFiles();
-    \$repair->clearDashlets();
-    \$repair->clearSugarFeedCache();
-    \$repair->clearThemeCache();
-    \$repair->clearJsFiles();
-    \$repair->rebuildExtensions();
-    
-    echo \"Quick Repair completed successfully\\n\";
-    exit(0);
-} catch (Exception \$e) {
-    echo \"Warning: Quick Repair error: \" . \$e->getMessage() . \"\\n\";
-    echo \"Continuing anyway...\\n\";
-    exit(0);
-}
-"
-
-if [ $? -ne 0 ]; then
-    echo "WARNING: Quick Repair had errors but continuing..."
-else
-    echo "✓ Quick Repair completed"
-fi
+echo "Clearing cache..."
+rm -rf /bitnami/suitecrm/public/legacy/cache/* 2>/dev/null || true
 
 # Create database tables
 echo ""
 echo "Checking database tables..."
 DB_PORT="${SUITECRM_DATABASE_PORT_NUMBER:-3306}"
 
-# Check if SSL certificate exists and database host requires SSL
-SSL_CA_PATH="${MYSQL_CLIENT_SSL_CA_FILE:-/opt/bitnami/mysql/certs/ca-certificate.crt}"
+# SSL Configuration via environment variables:
+# - MYSQL_SSL_CA: Path to CA certificate file (e.g., /path/to/ca-certificate.crt)
+# - MYSQL_CLIENT_ENABLE_SSL: Set to "yes" to enable SSL (used with MYSQL_SSL_CA)
+#
+# For DigitalOcean managed MySQL:
+#   -e MYSQL_SSL_CA=/opt/bitnami/mysql/certs/ca-certificate.crt
+#   -e MYSQL_CLIENT_ENABLE_SSL=yes
+#
+# For local MySQL without SSL: Don't set MYSQL_SSL_CA or set MYSQL_CLIENT_ENABLE_SSL=no
 
-if [ -f "$SSL_CA_PATH" ] && [[ "$SUITECRM_DATABASE_HOST" == *"digitalocean.com"* ]]; then
-    SSL_OPTS="--ssl-ca=$SSL_CA_PATH --ssl-verify-server-cert"
-    echo "Using SSL connection to database with CA: $SSL_CA_PATH"
-elif [ -f "$SSL_CA_PATH" ]; then
-    # Try SSL but don't require it
+SSL_CA_PATH="${MYSQL_SSL_CA:-${MYSQL_CLIENT_SSL_CA_FILE:-}}"
+SSL_ENABLED="${MYSQL_CLIENT_ENABLE_SSL:-no}"
+
+if [ "$SSL_ENABLED" = "yes" ] && [ -n "$SSL_CA_PATH" ] && [ -f "$SSL_CA_PATH" ]; then
     SSL_OPTS="--ssl-ca=$SSL_CA_PATH"
-    echo "SSL certificate available at $SSL_CA_PATH, attempting SSL connection..."
+    echo "Using SSL connection to database with CA: $SSL_CA_PATH"
 else
-    SSL_OPTS=""
-    echo "Using standard database connection (no SSL cert found at $SSL_CA_PATH)..."
+    # Default: disable SSL for MariaDB client
+    SSL_OPTS="--skip-ssl"
+    echo "Using standard database connection (SSL disabled)..."
 fi
 
 # Check if tables already exist
