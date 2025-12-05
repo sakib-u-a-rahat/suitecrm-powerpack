@@ -85,8 +85,37 @@ Go to **Admin > Schedulers** and create:
 ## 📚 Documentation
 
 - **[Installation Guide](INSTALLATION.md)** - Detailed setup instructions
+- **[Upgrade Guide](UPGRADE_GUIDE.md)** - Safe production upgrade (preserves data & config)
+- **[Quick Upgrade Reference](UPGRADE_QUICK_REFERENCE.md)** - One-page upgrade cheat sheet
 - **[Implementation Summary](IMPLEMENTATION_SUMMARY.md)** - Complete feature list
+- **[Test Report](TEST_REPORT.md)** - Comprehensive testing documentation
 - **[Changelog](../../CHANGELOG.md)** - Version history
+
+## 🔄 Upgrading
+
+**Upgrading from a previous version? Your data and config are safe!**
+
+### Docker (Automated - Recommended)
+```bash
+./upgrade-docker.sh suitecrm
+```
+
+### Docker (Manual)
+```bash
+docker pull mahir009/suitecrm-powerpack:v2.4.0
+docker stop suitecrm && docker rename suitecrm suitecrm_old
+docker run -d --name suitecrm \
+  -v suitecrm_data:/bitnami/suitecrm \
+  mahir009/suitecrm-powerpack:v2.4.0
+```
+
+### Manual Files
+```bash
+cp -r custom-modules/TwilioIntegration/* modules/TwilioIntegration/
+mysql DB < modules/TwilioIntegration/install/upgrade_to_v2.4.0.sql
+```
+
+**See [UPGRADE_GUIDE.md](UPGRADE_GUIDE.md) for complete instructions.**
 
 ---
 

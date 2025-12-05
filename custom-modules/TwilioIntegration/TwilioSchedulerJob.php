@@ -6,7 +6,7 @@
  * To enable: Admin > Schedulers > Create Scheduler
  * - Name: Twilio SMS Follow-up Check
  * - Job: function::TwilioSchedulerJob::checkSMSFollowups
- * - Interval: */1 * * * * (every hour)
+ * - Interval: 0 * * * * (every hour)
  */
 
 if (!defined('sugarEntry') || !sugarEntry) die('Not A Valid Entry Point');
