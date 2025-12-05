@@ -1,201 +1,418 @@
 <?php
 /**
  * Twilio SMS Webhook Handler
- * Handles incoming SMS and SMS status updates from Twilio
+ * Handles inbound SMS and delivery status updates
  */
-if(!defined('sugarEntry') || !sugarEntry) die('Not A Valid Entry Point');
 
-require_once('include/MVC/View/SugarView.php');
+if (!defined('sugarEntry') || !sugarEntry) die('Not A Valid Entry Point');
 
-class TwilioIntegrationViewSms_webhook extends SugarView {
-    
-    public function display() {
-        // Disable view rendering
-        $this->options['show_header'] = false;
-        $this->options['show_footer'] = false;
-        $this->options['show_title'] = false;
-        $this->options['show_subpanels'] = false;
+require_once('modules/TwilioIntegration/TwilioIntegration.php');
+require_once('modules/TwilioIntegration/TwilioSecurity.php');
+
+class TwilioIntegrationViewSms_webhook extends SugarView
+{
+    public function display()
+    {
+        // Validate webhook signature for security
+        TwilioSecurity::validateOrDie('sms_webhook');
+
+        $action = isset($_REQUEST['sms_action']) ? $_REQUEST['sms_action'] : 'inbound';
         
-        // Get Twilio request data
-        $messageSid = $_POST['MessageSid'] ?? $_POST['SmsSid'] ?? $_GET['MessageSid'] ?? '';
-        $messageStatus = $_POST['MessageStatus'] ?? $_POST['SmsStatus'] ?? $_GET['MessageStatus'] ?? '';
-        $from = $_POST['From'] ?? $_GET['From'] ?? '';
-        $to = $_POST['To'] ?? $_GET['To'] ?? '';
-        $body = $_POST['Body'] ?? $_GET['Body'] ?? '';
-        $numMedia = $_POST['NumMedia'] ?? $_GET['NumMedia'] ?? 0;
-        
-        // Log the webhook for debugging
-        $GLOBALS['log']->info("Twilio SMS Webhook: MessageSid=$messageSid, Status=$messageStatus, From=$from, To=$to");
-        
-        // Determine if this is an incoming message or a status update
-        if (!empty($body)) {
-            // This is an incoming SMS
-            $this->handleIncomingSMS($messageSid, $from, $to, $body, $numMedia);
-        } else if (!empty($messageStatus)) {
-            // This is a status callback for an outgoing message
-            $this->handleStatusUpdate($messageSid, $messageStatus, $from, $to);
+        switch ($action) {
+            case 'inbound':
+                $this->handleInboundSMS();
+                break;
+            case 'status':
+                $this->handleStatusCallback();
+                break;
+            default:
+                $this->handleInboundSMS();
         }
         
-        // Return TwiML response (empty for SMS webhooks, or auto-reply)
-        header('Content-Type: text/xml');
-        echo '<?xml version="1.0" encoding="UTF-8"?><Response></Response>';
-        exit;
+        die();
     }
     
     /**
-     * Handle incoming SMS message
+     * Handle inbound SMS message
      */
-    private function handleIncomingSMS($messageSid, $from, $to, $body, $numMedia) {
-        global $db;
+    private function handleInboundSMS()
+    {
+        $from = isset($_REQUEST['From']) ? $_REQUEST['From'] : '';
+        $to = isset($_REQUEST['To']) ? $_REQUEST['To'] : '';
+        $body = isset($_REQUEST['Body']) ? $_REQUEST['Body'] : '';
+        $messageSid = isset($_REQUEST['MessageSid']) ? $_REQUEST['MessageSid'] : '';
+        $numMedia = isset($_REQUEST['NumMedia']) ? intval($_REQUEST['NumMedia']) : 0;
         
-        $GLOBALS['log']->info("Twilio: Incoming SMS from $from: $body");
+        $GLOBALS['log']->info("Inbound SMS - From: $from, To: $to, SID: $messageSid, Body: " . substr($body, 0, 50));
         
-        // Find the contact/lead by phone number
-        $contact = $this->findContactByPhone($from);
+        // Find associated lead/contact
+        $leadInfo = $this->findLeadByPhone($from);
         
-        // Create a note to log the SMS
+        // Log the SMS
+        $this->logInboundSMS($from, $to, $body, $messageSid, $numMedia, $leadInfo);
+        
+        // Check for auto-reply keywords
+        $autoReply = $this->getAutoReply($body, $leadInfo);
+        
+        // Send TwiML response
+        header('Content-Type: application/xml');
+        
+        $twiml = '<?xml version="1.0" encoding="UTF-8"?>';
+        $twiml .= '<Response>';
+        
+        if (!empty($autoReply)) {
+            $twiml .= '<Message>' . htmlspecialchars($autoReply) . '</Message>';
+        }
+        
+        $twiml .= '</Response>';
+        
+        echo $twiml;
+    }
+    
+    /**
+     * Handle SMS delivery status callback
+     */
+    private function handleStatusCallback()
+    {
+        $messageSid = isset($_REQUEST['MessageSid']) ? $_REQUEST['MessageSid'] : '';
+        $messageStatus = isset($_REQUEST['MessageStatus']) ? $_REQUEST['MessageStatus'] : '';
+        $to = isset($_REQUEST['To']) ? $_REQUEST['To'] : '';
+        $errorCode = isset($_REQUEST['ErrorCode']) ? $_REQUEST['ErrorCode'] : '';
+        $errorMessage = isset($_REQUEST['ErrorMessage']) ? $_REQUEST['ErrorMessage'] : '';
+        
+        $GLOBALS['log']->info("SMS Status Callback - SID: $messageSid, Status: $messageStatus");
+        
+        // Update the note with delivery status
+        $this->updateSMSStatus($messageSid, $messageStatus, $errorCode, $errorMessage);
+        
+        // Return 200 OK
+        header('Content-Type: application/json');
+        echo json_encode(['status' => 'ok', 'processed' => true]);
+    }
+    
+    /**
+     * Log inbound SMS as a Note in CRM
+     */
+    private function logInboundSMS($from, $to, $body, $messageSid, $numMedia, $leadInfo)
+    {
+        // Create Note record
+        require_once('modules/Notes/Note.php');
         $note = BeanFactory::newBean('Notes');
-        $note->name = "SMS from " . ($contact ? $contact['name'] : $from);
-        $note->description = $body;
-        $note->description .= "\n\n---";
-        $note->description .= "\nTwilio Message SID: $messageSid";
-        $note->description .= "\nFrom: $from";
-        $note->description .= "\nTo: $to";
-        $note->description .= "\nDirection: Inbound";
-        $note->description .= "\nReceived: " . date('Y-m-d H:i:s');
+        
+        $callerName = $leadInfo ? $leadInfo['name'] : $from;
+        
+        $note->name = "📥 SMS from $callerName";
+        
+        $description = "Inbound SMS Message\n";
+        $description .= "==================\n\n";
+        $description .= "From: $from\n";
+        $description .= "To: $to\n";
+        $description .= "Time: " . date('Y-m-d H:i:s') . "\n";
+        $description .= "Message SID: $messageSid\n\n";
+        $description .= "Message:\n$body";
         
         if ($numMedia > 0) {
-            $note->description .= "\nMedia attachments: $numMedia";
-            
-            // Log media URLs if present
+            $description .= "\n\n[Contains $numMedia media attachment(s)]";
+            // Collect media URLs
             for ($i = 0; $i < $numMedia; $i++) {
-                $mediaUrl = $_POST["MediaUrl$i"] ?? '';
-                $mediaType = $_POST["MediaContentType$i"] ?? '';
-                if ($mediaUrl) {
-                    $note->description .= "\nMedia $i: $mediaUrl ($mediaType)";
+                $mediaUrl = isset($_REQUEST["MediaUrl$i"]) ? $_REQUEST["MediaUrl$i"] : '';
+                $mediaType = isset($_REQUEST["MediaContentType$i"]) ? $_REQUEST["MediaContentType$i"] : '';
+                if (!empty($mediaUrl)) {
+                    $description .= "\nMedia $i: $mediaUrl ($mediaType)";
                 }
             }
         }
         
-        // Link to contact if found
-        if ($contact) {
-            $note->parent_type = $contact['module'];
-            $note->parent_id = $contact['id'];
-            
-            if (!empty($contact['assigned_user_id'])) {
-                $note->assigned_user_id = $contact['assigned_user_id'];
-            }
+        $note->description = $description;
+        
+        if ($leadInfo) {
+            $note->parent_type = $leadInfo['type'];
+            $note->parent_id = $leadInfo['id'];
+            $note->assigned_user_id = $leadInfo['assigned_user_id'];
         }
         
-        $note->save();
+        $noteId = $note->save();
         
-        $GLOBALS['log']->info("Twilio: Logged incoming SMS as note {$note->id}");
+        // Create task for follow-up if no auto-reply was sent
+        $this->createSMSFollowUpTask($from, $body, $leadInfo);
         
-        // Optionally create a task for follow-up
-        $this->createFollowUpTask($contact, $from, $body);
-    }
-    
-    /**
-     * Handle SMS status update (for outgoing messages)
-     */
-    private function handleStatusUpdate($messageSid, $status, $from, $to) {
-        $GLOBALS['log']->info("Twilio SMS Status: $messageSid is now $status");
+        // Log to audit
+        $this->logAudit('inbound_sms', array(
+            'note_id' => $noteId,
+            'message_sid' => $messageSid,
+            'from' => $from,
+            'to' => $to,
+            'body_length' => strlen($body),
+            'lead_id' => $leadInfo ? $leadInfo['id'] : null,
+            'lead_type' => $leadInfo ? $leadInfo['type'] : null
+        ));
         
-        // Could update existing note/record with delivery status
-        // For now, just log it
+        $GLOBALS['log']->info("Logged inbound SMS - Note ID: $noteId, SID: $messageSid");
         
-        if ($status === 'failed' || $status === 'undelivered') {
-            $GLOBALS['log']->warn("Twilio SMS Failed: $messageSid to $to - Status: $status");
-            
-            // Could create a notification or task about failed message
+        // If no lead found, optionally create a new lead
+        if (!$leadInfo && !empty($GLOBALS['sugar_config']['twilio_auto_create_lead'])) {
+            $this->createLeadFromSMS($from, $body);
         }
     }
     
     /**
-     * Create a follow-up task for incoming SMS
+     * Create follow-up task for SMS
      */
-    private function createFollowUpTask($contact, $from, $body) {
-        $config = TwilioIntegration::getConfig();
-        
-        // Only create task if auto-logging is enabled
-        if (empty($config['enable_auto_logging'])) {
-            return;
-        }
-        
+    private function createSMSFollowUpTask($from, $body, $leadInfo)
+    {
+        require_once('modules/Tasks/Task.php');
         $task = BeanFactory::newBean('Tasks');
-        $task->name = "Follow up on SMS from " . ($contact ? $contact['name'] : $from);
+        
+        $callerName = $leadInfo ? $leadInfo['name'] : $from;
+        
+        $task->name = "Reply to SMS from $callerName";
         $task->status = 'Not Started';
         $task->priority = 'Medium';
-        $task->date_due = date('Y-m-d', strtotime('+1 day'));
-        $task->description = "Received SMS:\n\n" . $body;
-        $task->description .= "\n\nFrom: $from";
+        $task->date_due = gmdate('Y-m-d H:i:s', strtotime('+2 hours'));
         
-        if ($contact) {
-            $task->parent_type = $contact['module'];
-            $task->parent_id = $contact['id'];
-            
-            if (!empty($contact['assigned_user_id'])) {
-                $task->assigned_user_id = $contact['assigned_user_id'];
-            }
+        $taskDesc = "New SMS received from $from\n";
+        $taskDesc .= "Time: " . date('Y-m-d H:i:s') . "\n\n";
+        $taskDesc .= "Message:\n$body\n\n";
+        $taskDesc .= "Please respond to this message.";
+        
+        $task->description = $taskDesc;
+        
+        if ($leadInfo) {
+            $task->parent_type = $leadInfo['type'];
+            $task->parent_id = $leadInfo['id'];
+            $task->assigned_user_id = $leadInfo['assigned_user_id'];
         }
         
         $task->save();
         
-        $GLOBALS['log']->info("Twilio: Created follow-up task {$task->id} for SMS from $from");
+        $GLOBALS['log']->info("Created SMS follow-up task for $from");
     }
     
     /**
-     * Find contact or lead by phone number
+     * Update SMS status in CRM
      */
-    private function findContactByPhone($phone) {
-        global $db;
+    private function updateSMSStatus($messageSid, $status, $errorCode, $errorMessage)
+    {
+        $db = DBManagerFactory::getInstance();
+        $messageSidSafe = $db->quote($messageSid);
         
-        // Clean phone number for comparison
-        $cleanPhone = preg_replace('/[^0-9]/', '', $phone);
-        $lastDigits = substr($cleanPhone, -10); // Last 10 digits
+        // Find the note with this message SID
+        $sql = "SELECT id FROM notes WHERE description LIKE '%$messageSidSafe%' AND deleted = 0 ORDER BY date_entered DESC LIMIT 1";
+        $result = $db->query($sql);
         
-        // Search in Contacts
-        $sql = "SELECT id, first_name, last_name, assigned_user_id 
-                FROM contacts 
+        if ($row = $db->fetchByAssoc($result)) {
+            $note = BeanFactory::getBean('Notes', $row['id']);
+            if ($note) {
+                // Add status update to description
+                $statusUpdate = "\n\n--- Delivery Status Update ---\n";
+                $statusUpdate .= "Status: $status\n";
+                $statusUpdate .= "Time: " . date('Y-m-d H:i:s') . "\n";
+                
+                if (!empty($errorCode)) {
+                    $statusUpdate .= "Error Code: $errorCode\n";
+                    $statusUpdate .= "Error Message: $errorMessage\n";
+                }
+                
+                // Update note name with status indicator
+                if ($status === 'delivered') {
+                    $note->name = str_replace('📤', '✅', $note->name);
+                } elseif ($status === 'failed' || $status === 'undelivered') {
+                    $note->name = str_replace('📤', '❌', $note->name);
+                }
+                
+                $note->description .= $statusUpdate;
+                $note->save();
+                
+                // Log to audit
+                $this->logAudit('sms_status_update', array(
+                    'note_id' => $row['id'],
+                    'message_sid' => $messageSid,
+                    'status' => $status,
+                    'error_code' => $errorCode
+                ));
+                
+                $GLOBALS['log']->info("Updated SMS status - Note ID: {$row['id']}, Status: $status");
+            }
+        }
+    }
+    
+    /**
+     * Get auto-reply message based on keywords
+     */
+    private function getAutoReply($body, $leadInfo)
+    {
+        $bodyLower = strtolower(trim($body));
+        
+        // Check for STOP/unsubscribe
+        if (in_array($bodyLower, ['stop', 'unsubscribe', 'cancel', 'end', 'quit'])) {
+            // Mark lead as unsubscribed if found
+            if ($leadInfo) {
+                $this->markAsUnsubscribed($leadInfo);
+            }
+            return "You have been unsubscribed from our SMS messages. Reply START to re-subscribe.";
+        }
+        
+        // Check for START/re-subscribe
+        if (in_array($bodyLower, ['start', 'subscribe', 'yes'])) {
+            if ($leadInfo) {
+                $this->markAsSubscribed($leadInfo);
+            }
+            return "You have been re-subscribed to our SMS messages. Reply STOP to unsubscribe.";
+        }
+        
+        // Check for HELP
+        if (in_array($bodyLower, ['help', 'info'])) {
+            return "Boomers Hub Senior Living Advisory. Call us at " . ($GLOBALS['sugar_config']['twilio_phone_number'] ?? 'our office') . " or visit boomershub.com. Reply STOP to unsubscribe.";
+        }
+        
+        // No auto-reply for regular messages
+        return '';
+    }
+    
+    /**
+     * Mark lead as unsubscribed from SMS
+     */
+    private function markAsUnsubscribed($leadInfo)
+    {
+        if ($leadInfo['type'] === 'Leads') {
+            $bean = BeanFactory::getBean('Leads', $leadInfo['id']);
+        } else {
+            $bean = BeanFactory::getBean('Contacts', $leadInfo['id']);
+        }
+        
+        if ($bean) {
+            // Set do_not_call or similar field if available
+            if (isset($bean->do_not_call)) {
+                $bean->do_not_call = 1;
+            }
+            // Add to description
+            $bean->description = ($bean->description ? $bean->description . "\n\n" : '') . 
+                "[" . date('Y-m-d H:i:s') . "] Unsubscribed from SMS via STOP keyword";
+            $bean->save();
+            
+            $GLOBALS['log']->info("Marked {$leadInfo['type']} {$leadInfo['id']} as unsubscribed from SMS");
+        }
+    }
+    
+    /**
+     * Mark lead as subscribed to SMS
+     */
+    private function markAsSubscribed($leadInfo)
+    {
+        if ($leadInfo['type'] === 'Leads') {
+            $bean = BeanFactory::getBean('Leads', $leadInfo['id']);
+        } else {
+            $bean = BeanFactory::getBean('Contacts', $leadInfo['id']);
+        }
+        
+        if ($bean) {
+            if (isset($bean->do_not_call)) {
+                $bean->do_not_call = 0;
+            }
+            $bean->description = ($bean->description ? $bean->description . "\n\n" : '') . 
+                "[" . date('Y-m-d H:i:s') . "] Re-subscribed to SMS via START keyword";
+            $bean->save();
+            
+            $GLOBALS['log']->info("Marked {$leadInfo['type']} {$leadInfo['id']} as subscribed to SMS");
+        }
+    }
+    
+    /**
+     * Create a new lead from incoming SMS
+     */
+    private function createLeadFromSMS($from, $body)
+    {
+        require_once('modules/Leads/Lead.php');
+        $lead = BeanFactory::newBean('Leads');
+        
+        $lead->first_name = 'SMS';
+        $lead->last_name = 'Lead ' . substr($from, -4);
+        $lead->phone_mobile = $from;
+        $lead->lead_source = 'SMS';
+        $lead->status = 'New';
+        $lead->description = "Lead auto-created from inbound SMS\n";
+        $lead->description .= "Phone: $from\n";
+        $lead->description .= "First Message: $body\n";
+        $lead->description .= "Created: " . date('Y-m-d H:i:s');
+        
+        $leadId = $lead->save();
+        
+        $GLOBALS['log']->info("Auto-created lead $leadId from SMS from $from");
+        
+        return $leadId;
+    }
+    
+    /**
+     * Find lead or contact by phone
+     */
+    private function findLeadByPhone($phone)
+    {
+        $phone = preg_replace('/[^0-9]/', '', $phone);
+        if (strlen($phone) > 10) {
+            $phone = substr($phone, -10);
+        }
+        
+        $db = DBManagerFactory::getInstance();
+        
+        // Search Leads
+        $sql = "SELECT id, first_name, last_name, assigned_user_id FROM leads 
                 WHERE deleted = 0 
-                AND (
-                    REPLACE(REPLACE(REPLACE(REPLACE(phone_work, '-', ''), ' ', ''), '(', ''), ')', '') LIKE '%$lastDigits'
-                    OR REPLACE(REPLACE(REPLACE(REPLACE(phone_mobile, '-', ''), ' ', ''), '(', ''), ')', '') LIKE '%$lastDigits'
-                    OR REPLACE(REPLACE(REPLACE(REPLACE(phone_home, '-', ''), ' ', ''), '(', ''), ')', '') LIKE '%$lastDigits'
-                )
+                AND (REPLACE(REPLACE(REPLACE(REPLACE(phone_mobile, '-', ''), ' ', ''), '(', ''), ')', '') LIKE '%$phone%'
+                OR REPLACE(REPLACE(REPLACE(REPLACE(phone_work, '-', ''), ' ', ''), '(', ''), ')', '') LIKE '%$phone%'
+                OR REPLACE(REPLACE(REPLACE(REPLACE(phone_home, '-', ''), ' ', ''), '(', ''), ')', '') LIKE '%$phone%')
                 LIMIT 1";
         
         $result = $db->query($sql);
         if ($row = $db->fetchByAssoc($result)) {
             return array(
-                'module' => 'Contacts',
                 'id' => $row['id'],
                 'name' => trim($row['first_name'] . ' ' . $row['last_name']),
+                'type' => 'Leads',
                 'assigned_user_id' => $row['assigned_user_id']
             );
         }
         
-        // Search in Leads
-        $sql = "SELECT id, first_name, last_name, assigned_user_id 
-                FROM leads 
+        // Search Contacts
+        $sql = "SELECT id, first_name, last_name, assigned_user_id FROM contacts 
                 WHERE deleted = 0 
-                AND (
-                    REPLACE(REPLACE(REPLACE(REPLACE(phone_work, '-', ''), ' ', ''), '(', ''), ')', '') LIKE '%$lastDigits'
-                    OR REPLACE(REPLACE(REPLACE(REPLACE(phone_mobile, '-', ''), ' ', ''), '(', ''), ')', '') LIKE '%$lastDigits'
-                    OR REPLACE(REPLACE(REPLACE(REPLACE(phone_home, '-', ''), ' ', ''), '(', ''), ')', '') LIKE '%$lastDigits'
-                )
+                AND (REPLACE(REPLACE(REPLACE(REPLACE(phone_mobile, '-', ''), ' ', ''), '(', ''), ')', '') LIKE '%$phone%'
+                OR REPLACE(REPLACE(REPLACE(REPLACE(phone_work, '-', ''), ' ', ''), '(', ''), ')', '') LIKE '%$phone%'
+                OR REPLACE(REPLACE(REPLACE(REPLACE(phone_home, '-', ''), ' ', ''), '(', ''), ')', '') LIKE '%$phone%')
                 LIMIT 1";
         
         $result = $db->query($sql);
         if ($row = $db->fetchByAssoc($result)) {
             return array(
-                'module' => 'Leads',
                 'id' => $row['id'],
                 'name' => trim($row['first_name'] . ' ' . $row['last_name']),
+                'type' => 'Contacts',
                 'assigned_user_id' => $row['assigned_user_id']
             );
         }
         
         return null;
+    }
+    
+    /**
+     * Log audit record
+     */
+    private function logAudit($action, $data)
+    {
+        $db = DBManagerFactory::getInstance();
+        
+        try {
+            $id = create_guid();
+            $actionSafe = $db->quote($action);
+            $dataSafe = $db->quote(json_encode($data));
+            $userId = isset($GLOBALS['current_user']) ? $GLOBALS['current_user']->id : '';
+            $userIdSafe = $db->quote($userId);
+            $dateCreated = gmdate('Y-m-d H:i:s');
+            
+            $sql = "INSERT INTO twilio_audit_log (id, action, data, user_id, date_created) 
+                    VALUES ('$id', '$actionSafe', '$dataSafe', '$userIdSafe', '$dateCreated')";
+            $db->query($sql, false);
+        } catch (Exception $e) {
+            $GLOBALS['log']->info("Twilio Audit [$action]: " . json_encode($data));
+        }
     }
 }

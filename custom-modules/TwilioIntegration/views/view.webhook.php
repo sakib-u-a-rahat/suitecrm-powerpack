@@ -1,262 +1,384 @@
 <?php
 /**
  * Twilio Voice Webhook Handler
- * Handles incoming calls and call status updates from Twilio
+ * Handles inbound calls and call status updates
  */
-if(!defined('sugarEntry') || !sugarEntry) die('Not A Valid Entry Point');
 
-require_once('include/MVC/View/SugarView.php');
+if (!defined('sugarEntry') || !sugarEntry) die('Not A Valid Entry Point');
 
-class TwilioIntegrationViewWebhook extends SugarView {
-    
-    public function display() {
-        // Disable view rendering
-        $this->options['show_header'] = false;
-        $this->options['show_footer'] = false;
-        $this->options['show_title'] = false;
-        $this->options['show_subpanels'] = false;
+require_once('modules/TwilioIntegration/TwilioIntegration.php');
+require_once('modules/TwilioIntegration/TwilioSecurity.php');
+
+class TwilioIntegrationViewWebhook extends SugarView
+{
+    public function display()
+    {
+        // Validate webhook signature for security
+        TwilioSecurity::validateOrDie('voice_webhook');
+
+        // Determine the type of webhook
+        $action = isset($_REQUEST['webhook_action']) ? $_REQUEST['webhook_action'] : 'voice';
         
-        // Get Twilio request data
-        $callSid = $_POST['CallSid'] ?? $_GET['CallSid'] ?? '';
-        $callStatus = $_POST['CallStatus'] ?? $_GET['CallStatus'] ?? '';
-        $from = $_POST['From'] ?? $_GET['From'] ?? '';
-        $to = $_POST['To'] ?? $_GET['To'] ?? '';
-        $direction = $_POST['Direction'] ?? $_GET['Direction'] ?? '';
-        $duration = $_POST['CallDuration'] ?? $_GET['CallDuration'] ?? 0;
-        $recordingUrl = $_POST['RecordingUrl'] ?? $_GET['RecordingUrl'] ?? '';
-        $recordingSid = $_POST['RecordingSid'] ?? $_GET['RecordingSid'] ?? '';
-        
-        // Log the webhook for debugging
-        $GLOBALS['log']->info("Twilio Webhook: CallSid=$callSid, Status=$callStatus, From=$from, To=$to");
-        
-        // Validate the request is from Twilio (optional but recommended)
-        if (!$this->validateTwilioRequest()) {
-            $GLOBALS['log']->warn("Twilio Webhook: Invalid request signature");
-            // Still process in development, but log warning
+        switch ($action) {
+            case 'voice':
+                $this->handleVoiceWebhook();
+                break;
+            case 'status':
+                $this->handleStatusWebhook();
+                break;
+            case 'fallback':
+                $this->handleFallbackWebhook();
+                break;
+            default:
+                $this->handleVoiceWebhook();
         }
         
-        // Handle different call statuses
-        switch ($callStatus) {
-            case 'initiated':
-            case 'ringing':
-                // Call is starting - could update UI in real-time if needed
-                $this->logWebhookEvent('call_initiated', $callSid, $from, $to, $callStatus);
-                break;
-                
-            case 'in-progress':
-            case 'answered':
-                // Call is active
-                $this->logWebhookEvent('call_answered', $callSid, $from, $to, $callStatus);
-                break;
-                
-            case 'completed':
-                // Call ended - log to SuiteCRM
-                $this->logCompletedCall($callSid, $from, $to, $duration, $recordingUrl, $recordingSid, $direction);
-                break;
-                
-            case 'busy':
-            case 'no-answer':
-            case 'canceled':
-            case 'failed':
-                // Call didn't connect
-                $this->logFailedCall($callSid, $from, $to, $callStatus, $direction);
-                break;
-        }
-        
-        // Return empty 200 response to Twilio
-        header('Content-Type: text/xml');
-        echo '<?xml version="1.0" encoding="UTF-8"?><Response></Response>';
-        exit;
+        die();
     }
     
     /**
-     * Validate that request is actually from Twilio
+     * Handle incoming voice call webhook
+     * This is the primary webhook URL configured in Twilio console
      */
-    private function validateTwilioRequest() {
-        $config = TwilioIntegration::getConfig();
-        $authToken = $config['auth_token'];
+    private function handleVoiceWebhook()
+    {
+        $from = isset($_REQUEST['From']) ? $_REQUEST['From'] : '';
+        $to = isset($_REQUEST['To']) ? $_REQUEST['To'] : '';
+        $callSid = isset($_REQUEST['CallSid']) ? $_REQUEST['CallSid'] : '';
+        $callStatus = isset($_REQUEST['CallStatus']) ? $_REQUEST['CallStatus'] : '';
         
-        if (empty($authToken)) {
-            return true; // Skip validation if no token configured
-        }
+        $GLOBALS['log']->info("Twilio Voice Webhook - From: $from, To: $to, SID: $callSid, Status: $callStatus");
         
-        // Get Twilio signature from header
-        $signature = $_SERVER['HTTP_X_TWILIO_SIGNATURE'] ?? '';
-        if (empty($signature)) {
-            return false;
-        }
+        // Log the inbound call
+        $this->logInboundCall($from, $to, $callSid, $callStatus);
         
-        // Build the URL that was called
-        global $sugar_config;
-        $url = $sugar_config['site_url'] . '/legacy/index.php?' . $_SERVER['QUERY_STRING'];
-        
-        // Sort POST params and create string
-        $params = $_POST;
-        ksort($params);
-        foreach ($params as $key => $value) {
-            $url .= $key . $value;
-        }
-        
-        // Calculate expected signature
-        $expectedSignature = base64_encode(hash_hmac('sha1', $url, $authToken, true));
-        
-        return hash_equals($expectedSignature, $signature);
-    }
-    
-    /**
-     * Log webhook event
-     */
-    private function logWebhookEvent($event, $callSid, $from, $to, $status) {
-        $GLOBALS['log']->info("Twilio Event: $event - CallSid=$callSid, From=$from, To=$to, Status=$status");
-    }
-    
-    /**
-     * Log completed call to SuiteCRM
-     */
-    private function logCompletedCall($callSid, $from, $to, $duration, $recordingUrl, $recordingSid, $direction) {
-        global $current_user, $db;
-        
-        // Determine if this is inbound or outbound
-        $config = TwilioIntegration::getConfig();
-        $twilioNumber = $config['phone_number'];
-        
-        $isInbound = ($to === $twilioNumber || $direction === 'inbound');
-        $contactPhone = $isInbound ? $from : $to;
-        
-        // Try to find the contact/lead by phone number
-        $contact = $this->findContactByPhone($contactPhone);
-        
-        // Create call record
-        $call = BeanFactory::newBean('Calls');
-        $call->name = ($isInbound ? "Incoming call from " : "Call to ") . $contactPhone;
-        $call->status = 'Held';
-        $call->direction = $isInbound ? 'Inbound' : 'Outbound';
-        $call->date_start = gmdate('Y-m-d H:i:s');
-        $call->duration_hours = floor($duration / 3600);
-        $call->duration_minutes = floor(($duration % 3600) / 60);
-        
-        // Link to contact if found
-        if ($contact) {
-            $call->parent_type = $contact['module'];
-            $call->parent_id = $contact['id'];
-            $call->name = ($isInbound ? "Incoming call from " : "Call to ") . $contact['name'];
-        }
-        
-        // Build description
-        $call->description = "Twilio Call\n";
-        $call->description .= "Call SID: $callSid\n";
-        $call->description .= "From: $from\n";
-        $call->description .= "To: $to\n";
-        $call->description .= "Duration: " . gmdate('H:i:s', $duration) . "\n";
-        
-        if ($recordingUrl) {
-            $call->description .= "Recording: $recordingUrl\n";
-            $call->description .= "Recording SID: $recordingSid\n";
-        }
-        
-        // Assign to a user if contact has an assigned user
-        if ($contact && !empty($contact['assigned_user_id'])) {
-            $call->assigned_user_id = $contact['assigned_user_id'];
-        }
-        
-        $call->save();
-        
-        $GLOBALS['log']->info("Twilio: Logged call {$call->id} for $contactPhone (Duration: {$duration}s)");
-    }
-    
-    /**
-     * Log failed/missed call
-     */
-    private function logFailedCall($callSid, $from, $to, $status, $direction) {
-        global $db;
+        // Return TwiML to handle the call
+        header('Content-Type: application/xml');
         
         $config = TwilioIntegration::getConfig();
-        $twilioNumber = $config['phone_number'];
+        $siteUrl = $GLOBALS['sugar_config']['site_url'] ?? '';
         
-        $isInbound = ($to === $twilioNumber || $direction === 'inbound');
-        $contactPhone = $isInbound ? $from : $to;
+        // Find lead/contact info for personalization
+        $leadInfo = $this->findLeadByPhone($from);
         
-        $contact = $this->findContactByPhone($contactPhone);
+        // Get BDM phone
+        $bdmPhone = $this->getBDMPhone($leadInfo);
         
-        $call = BeanFactory::newBean('Calls');
-        $call->name = ($isInbound ? "Missed call from " : "Failed call to ") . $contactPhone;
-        $call->status = 'Not Held';
-        $call->direction = $isInbound ? 'Inbound' : 'Outbound';
-        $call->date_start = gmdate('Y-m-d H:i:s');
+        $twiml = '<?xml version="1.0" encoding="UTF-8"?>';
+        $twiml .= '<Response>';
         
-        if ($contact) {
-            $call->parent_type = $contact['module'];
-            $call->parent_id = $contact['id'];
-            $call->name = ($isInbound ? "Missed call from " : "Failed call to ") . $contact['name'];
+        // Greeting
+        if ($leadInfo && !empty($leadInfo['name'])) {
+            $firstName = explode(' ', $leadInfo['name'])[0];
+            $twiml .= '<Say voice="Polly.Joanna">Hello ' . htmlspecialchars($firstName) . ', thank you for calling Boomers Hub.</Say>';
+        } else {
+            $twiml .= '<Say voice="Polly.Joanna">Thank you for calling Boomers Hub.</Say>';
+        }
+        
+        if (!empty($bdmPhone)) {
+            // Route to BDM with voicemail fallback
+            $voicemailAction = $siteUrl . '/index.php?module=TwilioIntegration&action=twiml&dial_action=voicemail&from=' . urlencode($from);
             
-            if (!empty($contact['assigned_user_id'])) {
-                $call->assigned_user_id = $contact['assigned_user_id'];
-            }
+            $twiml .= '<Say voice="Polly.Joanna">Please hold while I connect you to your representative.</Say>';
+            $twiml .= '<Dial timeout="25" action="' . htmlspecialchars($voicemailAction) . '" method="POST">';
+            $twiml .= '<Number>' . htmlspecialchars($bdmPhone) . '</Number>';
+            $twiml .= '</Dial>';
+        } else {
+            // No BDM - go to general voicemail
+            $recordingAction = $siteUrl . '/index.php?module=TwilioIntegration&action=twiml&dial_action=recording&from=' . urlencode($from);
+            
+            $twiml .= '<Say voice="Polly.Joanna">We are currently unavailable. Please leave a message after the tone.</Say>';
+            $twiml .= '<Record maxLength="120" playBeep="true" action="' . htmlspecialchars($recordingAction) . '" transcribe="true" />';
+            $twiml .= '<Say voice="Polly.Joanna">I did not receive a recording. Goodbye.</Say>';
+            $twiml .= '<Hangup/>';
         }
         
-        $call->description = "Twilio Call - $status\n";
-        $call->description .= "Call SID: $callSid\n";
-        $call->description .= "From: $from\n";
-        $call->description .= "To: $to\n";
-        $call->description .= "Status: $status\n";
+        $twiml .= '</Response>';
         
-        $call->save();
-        
-        $GLOBALS['log']->info("Twilio: Logged failed call {$call->id} for $contactPhone (Status: $status)");
+        echo $twiml;
     }
     
     /**
-     * Find contact or lead by phone number
+     * Handle call status webhook (status callback URL)
      */
-    private function findContactByPhone($phone) {
-        global $db;
+    private function handleStatusWebhook()
+    {
+        $callSid = isset($_REQUEST['CallSid']) ? $_REQUEST['CallSid'] : '';
+        $callStatus = isset($_REQUEST['CallStatus']) ? $_REQUEST['CallStatus'] : '';
+        $callDuration = isset($_REQUEST['CallDuration']) ? $_REQUEST['CallDuration'] : '0';
+        $from = isset($_REQUEST['From']) ? $_REQUEST['From'] : '';
+        $to = isset($_REQUEST['To']) ? $_REQUEST['To'] : '';
+        $direction = isset($_REQUEST['Direction']) ? $_REQUEST['Direction'] : '';
         
-        // Clean phone number for comparison
-        $cleanPhone = preg_replace('/[^0-9]/', '', $phone);
-        $lastDigits = substr($cleanPhone, -10); // Last 10 digits
+        $GLOBALS['log']->info("Twilio Status Webhook - SID: $callSid, Status: $callStatus, Duration: $callDuration");
         
-        // Search in Contacts
-        $sql = "SELECT id, first_name, last_name, assigned_user_id 
-                FROM contacts 
+        // Update call record in CRM
+        $this->updateCallStatus($callSid, $callStatus, $callDuration, $from, $to, $direction);
+        
+        // Return 200 OK
+        header('Content-Type: application/json');
+        echo json_encode(['status' => 'ok', 'processed' => true]);
+    }
+    
+    /**
+     * Handle fallback webhook (when primary fails)
+     */
+    private function handleFallbackWebhook()
+    {
+        $errorCode = isset($_REQUEST['ErrorCode']) ? $_REQUEST['ErrorCode'] : '';
+        $errorMessage = isset($_REQUEST['ErrorMessage']) ? $_REQUEST['ErrorMessage'] : '';
+        
+        $GLOBALS['log']->error("Twilio Fallback Triggered - Code: $errorCode, Message: $errorMessage");
+        
+        // Return simple TwiML
+        header('Content-Type: application/xml');
+        
+        $twiml = '<?xml version="1.0" encoding="UTF-8"?>';
+        $twiml .= '<Response>';
+        $twiml .= '<Say voice="Polly.Joanna">We are experiencing technical difficulties. Please try again later or leave a message after the tone.</Say>';
+        $twiml .= '<Record maxLength="60" playBeep="true" />';
+        $twiml .= '<Say voice="Polly.Joanna">Goodbye.</Say>';
+        $twiml .= '<Hangup/>';
+        $twiml .= '</Response>';
+        
+        echo $twiml;
+    }
+    
+    /**
+     * Log inbound call in CRM
+     */
+    private function logInboundCall($from, $to, $callSid, $status)
+    {
+        $leadInfo = $this->findLeadByPhone($from);
+        
+        // Create Call record
+        require_once('modules/Calls/Call.php');
+        $call = BeanFactory::newBean('Calls');
+        
+        $call->name = 'Inbound Call from ' . $from;
+        $call->status = 'Planned'; // Will be updated by status webhook
+        $call->direction = 'Inbound';
+        $call->date_start = gmdate('Y-m-d H:i:s');
+        $call->duration_hours = 0;
+        $call->duration_minutes = 0;
+        $call->description = "Inbound call from $from to $to\nCall SID: $callSid\nInitial Status: $status";
+        
+        if ($leadInfo) {
+            $call->parent_type = $leadInfo['type'];
+            $call->parent_id = $leadInfo['id'];
+            $call->assigned_user_id = $leadInfo['assigned_user_id'];
+            $call->name = 'Inbound Call from ' . $leadInfo['name'];
+        }
+        
+        $callId = $call->save();
+        
+        // Log to audit
+        $this->logAudit('inbound_call', array(
+            'call_id' => $callId,
+            'call_sid' => $callSid,
+            'from' => $from,
+            'to' => $to,
+            'lead_id' => $leadInfo ? $leadInfo['id'] : null,
+            'lead_type' => $leadInfo ? $leadInfo['type'] : null
+        ));
+        
+        $GLOBALS['log']->info("Logged inbound call - CRM ID: $callId, SID: $callSid");
+    }
+    
+    /**
+     * Update call status in CRM
+     */
+    private function updateCallStatus($callSid, $status, $duration, $from, $to, $direction)
+    {
+        $db = DBManagerFactory::getInstance();
+        $callSidSafe = $db->quote($callSid);
+        
+        // Find the call record
+        $sql = "SELECT id FROM calls WHERE description LIKE '%$callSidSafe%' AND deleted = 0 ORDER BY date_entered DESC LIMIT 1";
+        $result = $db->query($sql);
+        
+        if ($row = $db->fetchByAssoc($result)) {
+            $call = BeanFactory::getBean('Calls', $row['id']);
+            if ($call) {
+                // Map Twilio status to SuiteCRM status
+                switch ($status) {
+                    case 'completed':
+                        $call->status = 'Held';
+                        break;
+                    case 'busy':
+                    case 'no-answer':
+                    case 'failed':
+                    case 'canceled':
+                        $call->status = 'Not Held';
+                        // Create follow-up task for missed calls
+                        if ($direction === 'inbound') {
+                            $this->createFollowUpTask($from, $status, $call->parent_type, $call->parent_id, $call->assigned_user_id);
+                        }
+                        break;
+                    default:
+                        $call->status = 'Planned';
+                }
+                
+                // Update duration
+                $durationInt = intval($duration);
+                $call->duration_hours = floor($durationInt / 3600);
+                $call->duration_minutes = floor(($durationInt % 3600) / 60);
+                
+                $call->description .= "\n\nFinal Status: $status\nDuration: " . gmdate('H:i:s', $durationInt);
+                $call->save();
+                
+                // Log to audit
+                $this->logAudit('call_status_update', array(
+                    'call_id' => $row['id'],
+                    'call_sid' => $callSid,
+                    'status' => $status,
+                    'duration' => $duration
+                ));
+                
+                $GLOBALS['log']->info("Updated call status - ID: {$row['id']}, Status: $status, Duration: $duration");
+            }
+        } else {
+            // Call record not found - might be outbound initiated differently
+            $GLOBALS['log']->warn("Call record not found for SID: $callSid");
+        }
+    }
+    
+    /**
+     * Create follow-up task for missed calls
+     */
+    private function createFollowUpTask($from, $status, $parentType, $parentId, $assignedUserId)
+    {
+        require_once('modules/Tasks/Task.php');
+        $task = BeanFactory::newBean('Tasks');
+        
+        $leadInfo = $this->findLeadByPhone($from);
+        $callerName = $leadInfo ? $leadInfo['name'] : $from;
+        
+        $task->name = "Return missed call - $callerName";
+        $task->status = 'Not Started';
+        $task->priority = 'High';
+        $task->date_due = gmdate('Y-m-d H:i:s', strtotime('+4 hours'));
+        $task->description = "Missed inbound call from $from\nStatus: $status\nTime: " . date('Y-m-d H:i:s') . "\n\nPlease call back as soon as possible.";
+        
+        if (!empty($parentType) && !empty($parentId)) {
+            $task->parent_type = $parentType;
+            $task->parent_id = $parentId;
+        }
+        
+        if (!empty($assignedUserId)) {
+            $task->assigned_user_id = $assignedUserId;
+        }
+        
+        $task->save();
+        
+        $GLOBALS['log']->info("Created follow-up task for missed call from $from");
+    }
+    
+    /**
+     * Find lead or contact by phone
+     */
+    private function findLeadByPhone($phone)
+    {
+        $phone = preg_replace('/[^0-9]/', '', $phone);
+        if (strlen($phone) > 10) {
+            $phone = substr($phone, -10);
+        }
+        
+        $db = DBManagerFactory::getInstance();
+        
+        // Search Leads
+        $sql = "SELECT id, first_name, last_name, assigned_user_id FROM leads 
                 WHERE deleted = 0 
-                AND (
-                    REPLACE(REPLACE(REPLACE(REPLACE(phone_work, '-', ''), ' ', ''), '(', ''), ')', '') LIKE '%$lastDigits'
-                    OR REPLACE(REPLACE(REPLACE(REPLACE(phone_mobile, '-', ''), ' ', ''), '(', ''), ')', '') LIKE '%$lastDigits'
-                    OR REPLACE(REPLACE(REPLACE(REPLACE(phone_home, '-', ''), ' ', ''), '(', ''), ')', '') LIKE '%$lastDigits'
-                )
+                AND (REPLACE(REPLACE(REPLACE(REPLACE(phone_mobile, '-', ''), ' ', ''), '(', ''), ')', '') LIKE '%$phone%'
+                OR REPLACE(REPLACE(REPLACE(REPLACE(phone_work, '-', ''), ' ', ''), '(', ''), ')', '') LIKE '%$phone%'
+                OR REPLACE(REPLACE(REPLACE(REPLACE(phone_home, '-', ''), ' ', ''), '(', ''), ')', '') LIKE '%$phone%')
                 LIMIT 1";
         
         $result = $db->query($sql);
         if ($row = $db->fetchByAssoc($result)) {
             return array(
-                'module' => 'Contacts',
                 'id' => $row['id'],
                 'name' => trim($row['first_name'] . ' ' . $row['last_name']),
+                'type' => 'Leads',
                 'assigned_user_id' => $row['assigned_user_id']
             );
         }
         
-        // Search in Leads
-        $sql = "SELECT id, first_name, last_name, assigned_user_id 
-                FROM leads 
+        // Search Contacts
+        $sql = "SELECT id, first_name, last_name, assigned_user_id FROM contacts 
                 WHERE deleted = 0 
-                AND (
-                    REPLACE(REPLACE(REPLACE(REPLACE(phone_work, '-', ''), ' ', ''), '(', ''), ')', '') LIKE '%$lastDigits'
-                    OR REPLACE(REPLACE(REPLACE(REPLACE(phone_mobile, '-', ''), ' ', ''), '(', ''), ')', '') LIKE '%$lastDigits'
-                    OR REPLACE(REPLACE(REPLACE(REPLACE(phone_home, '-', ''), ' ', ''), '(', ''), ')', '') LIKE '%$lastDigits'
-                )
+                AND (REPLACE(REPLACE(REPLACE(REPLACE(phone_mobile, '-', ''), ' ', ''), '(', ''), ')', '') LIKE '%$phone%'
+                OR REPLACE(REPLACE(REPLACE(REPLACE(phone_work, '-', ''), ' ', ''), '(', ''), ')', '') LIKE '%$phone%'
+                OR REPLACE(REPLACE(REPLACE(REPLACE(phone_home, '-', ''), ' ', ''), '(', ''), ')', '') LIKE '%$phone%')
                 LIMIT 1";
         
         $result = $db->query($sql);
         if ($row = $db->fetchByAssoc($result)) {
             return array(
-                'module' => 'Leads',
                 'id' => $row['id'],
                 'name' => trim($row['first_name'] . ' ' . $row['last_name']),
+                'type' => 'Contacts',
                 'assigned_user_id' => $row['assigned_user_id']
             );
         }
         
         return null;
+    }
+    
+    /**
+     * Get BDM phone number
+     */
+    private function getBDMPhone($leadInfo)
+    {
+        if (!$leadInfo || empty($leadInfo['assigned_user_id'])) {
+            return $GLOBALS['sugar_config']['twilio_fallback_phone'] ?? '';
+        }
+        
+        $db = DBManagerFactory::getInstance();
+        $userId = $db->quote($leadInfo['assigned_user_id']);
+        
+        $sql = "SELECT phone_mobile, phone_work FROM users WHERE id = '$userId' AND deleted = 0";
+        $result = $db->query($sql);
+        
+        if ($row = $db->fetchByAssoc($result)) {
+            $phone = !empty($row['phone_mobile']) ? $row['phone_mobile'] : $row['phone_work'];
+            if (!empty($phone)) {
+                $digits = preg_replace('/[^0-9]/', '', $phone);
+                if (strlen($digits) === 10) {
+                    $digits = '1' . $digits;
+                }
+                return '+' . $digits;
+            }
+        }
+        
+        return '';
+    }
+    
+    /**
+     * Log audit record
+     */
+    private function logAudit($action, $data)
+    {
+        $db = DBManagerFactory::getInstance();
+        
+        // Check if audit table exists
+        $tableName = 'twilio_audit_log';
+        
+        $id = create_guid();
+        $actionSafe = $db->quote($action);
+        $dataSafe = $db->quote(json_encode($data));
+        $userId = isset($GLOBALS['current_user']) ? $GLOBALS['current_user']->id : '';
+        $userIdSafe = $db->quote($userId);
+        $dateCreated = gmdate('Y-m-d H:i:s');
+        
+        // Try to insert, fail silently if table doesn't exist
+        try {
+            $sql = "INSERT INTO $tableName (id, action, data, user_id, date_created) 
+                    VALUES ('$id', '$actionSafe', '$dataSafe', '$userIdSafe', '$dateCreated')";
+            $db->query($sql, false); // false = don't die on error
+        } catch (Exception $e) {
+            // Table might not exist yet - log to file instead
+            $GLOBALS['log']->info("Twilio Audit [$action]: " . json_encode($data));
+        }
     }
 }

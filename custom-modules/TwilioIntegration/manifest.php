@@ -9,13 +9,13 @@ $manifest = array(
     'readme' => '',
     'key' => 'twilio_integration',
     'author' => 'SuiteCRM Extended',
-    'description' => 'Twilio Integration - Click-to-call, Auto logging, and Call recordings',
+    'description' => 'Twilio Integration - Complete voice & SMS solution with security, automation, and analytics',
     'icon' => '',
     'is_uninstallable' => true,
     'name' => 'Twilio Integration',
-    'published_date' => '2025-11-16',
+    'published_date' => '2025-12-05',
     'type' => 'module',
-    'version' => '1.0.0',
+    'version' => '2.4.0',
     'remove_tables' => 'prompt',
 );
 
@@ -47,12 +47,40 @@ $installdefs = array(
             'to' => 'modules/TwilioIntegration/logic_hooks.php',
         ),
         array(
+            'from' => '<basepath>/controller.php',
+            'to' => 'modules/TwilioIntegration/controller.php',
+        ),
+        array(
+            'from' => '<basepath>/TwilioSecurity.php',
+            'to' => 'modules/TwilioIntegration/TwilioSecurity.php',
+        ),
+        array(
+            'from' => '<basepath>/TwilioRecordingManager.php',
+            'to' => 'modules/TwilioIntegration/TwilioRecordingManager.php',
+        ),
+        array(
+            'from' => '<basepath>/TwilioScheduler.php',
+            'to' => 'modules/TwilioIntegration/TwilioScheduler.php',
+        ),
+        array(
+            'from' => '<basepath>/TwilioSchedulerJob.php',
+            'to' => 'modules/TwilioIntegration/TwilioSchedulerJob.php',
+        ),
+        array(
+            'from' => '<basepath>/cron',
+            'to' => 'modules/TwilioIntegration/cron',
+        ),
+        array(
             'from' => '<basepath>/views',
             'to' => 'modules/TwilioIntegration/views',
         ),
         array(
             'from' => '<basepath>/language',
             'to' => 'modules/TwilioIntegration/language',
+        ),
+        array(
+            'from' => '<basepath>/install',
+            'to' => 'modules/TwilioIntegration/install',
         ),
         array(
             'from' => '<basepath>/Extensions/modules/Contacts/Ext/Vardefs/twilio_js.php',

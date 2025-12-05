@@ -31,11 +31,11 @@ fi
 
 # Build and push
 docker buildx build \
-    --platform linux/amd64,linux/arm64 \
+    --platform linux/amd64 \
     --tag ${DOCKER_USERNAME}/${IMAGE_NAME}:latest \
     --tag ${DOCKER_USERNAME}/${IMAGE_NAME}:v${VERSION} \
-    --tag ${DOCKER_USERNAME}/${IMAGE_NAME}:1.0 \
-    --tag ${DOCKER_USERNAME}/${IMAGE_NAME}:1 \
+    --tag ${DOCKER_USERNAME}/${IMAGE_NAME}:${VERSION%%.*}.${VERSION#*.} \
+    --tag ${DOCKER_USERNAME}/${IMAGE_NAME}:${VERSION%%.*} \
     --push \
     .
 

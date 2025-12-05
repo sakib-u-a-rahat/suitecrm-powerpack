@@ -14,6 +14,10 @@ class TwilioIntegrationController extends SugarController {
         $this->action_remap['sms_webhook'] = 'sms_webhook';
         $this->action_remap['twiml'] = 'twiml';
         $this->action_remap['config'] = 'config';
+        $this->action_remap['metrics'] = 'metrics';
+        $this->action_remap['recording_webhook'] = 'recording_webhook';
+        $this->action_remap['dashboard'] = 'dashboard';
+        $this->action_remap['bulksms'] = 'bulksms';
     }
     
     public function action_makecall() {
@@ -38,5 +42,21 @@ class TwilioIntegrationController extends SugarController {
     
     public function action_config() {
         $this->view = 'config';
+    }
+    
+    public function action_metrics() {
+        $this->view = 'metrics';
+    }
+
+    public function action_recording_webhook() {
+        $this->view = 'recording_webhook';
+    }
+
+    public function action_dashboard() {
+        $this->view = 'dashboard';
+    }
+
+    public function action_bulksms() {
+        $this->view = 'bulksms';
     }
 }

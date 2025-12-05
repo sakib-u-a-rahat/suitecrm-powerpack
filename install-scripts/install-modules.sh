@@ -158,12 +158,12 @@ else
 fi
 
 # Check if tables already exist
-TABLES_EXIST=$(mysql -h"$SUITECRM_DATABASE_HOST" -P"$DB_PORT" -u"$SUITECRM_DATABASE_USER" -p"$SUITECRM_DATABASE_PASSWORD" $SSL_OPTS "$SUITECRM_DATABASE_NAME" -sN -e "SELECT COUNT(*) FROM information_schema.tables WHERE table_schema='$SUITECRM_DATABASE_NAME' AND table_name IN ('twilio_integration', 'lead_journey', 'funnel_dashboard');" 2>/dev/null || echo "0")
+TABLES_EXIST=$(mysql -h"$SUITECRM_DATABASE_HOST" -P"$DB_PORT" -u"$SUITECRM_DATABASE_USER" -p"$SUITECRM_DATABASE_PASSWORD" $SSL_OPTS "$SUITECRM_DATABASE_NAME" -sN -e "SELECT COUNT(*) FROM information_schema.tables WHERE table_schema='$SUITECRM_DATABASE_NAME' AND table_name IN ('twilio_integration', 'twilio_audit_log', 'lead_journey', 'funnel_dashboard');" 2>/dev/null || echo "0")
 
-if [ "$TABLES_EXIST" = "3" ]; then
+if [ "$TABLES_EXIST" = "4" ]; then
     echo "✓ All module tables already exist, skipping migration"
 else
-    echo "Creating database tables (found $TABLES_EXIST/3 tables)..."
+    echo "Creating database tables (found $TABLES_EXIST/4 tables)..."
     mysql -h"$SUITECRM_DATABASE_HOST" -P"$DB_PORT" -u"$SUITECRM_DATABASE_USER" -p"$SUITECRM_DATABASE_PASSWORD" $SSL_OPTS "$SUITECRM_DATABASE_NAME" <<'EOF'
 
 -- Twilio Integration table
@@ -186,6 +186,18 @@ CREATE TABLE IF NOT EXISTS twilio_integration (
     webhook_url VARCHAR(255),
     INDEX idx_assigned (assigned_user_id),
     INDEX idx_deleted (deleted)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
+
+-- Twilio Audit Log table
+CREATE TABLE IF NOT EXISTS twilio_audit_log (
+    id VARCHAR(36) NOT NULL PRIMARY KEY,
+    action VARCHAR(50) NOT NULL,
+    data TEXT,
+    user_id VARCHAR(36),
+    date_created DATETIME NOT NULL,
+    INDEX idx_action (action),
+    INDEX idx_user_id (user_id),
+    INDEX idx_date_created (date_created)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
 
 -- Lead Journey table

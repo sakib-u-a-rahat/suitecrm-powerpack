@@ -40,9 +40,11 @@ RUN echo '<?php' > /opt/bitnami/suitecrm/config_override.php.template && \
     echo '$sugar_config["twilio_account_sid"] = getenv("TWILIO_ACCOUNT_SID") ?: "";' >> /opt/bitnami/suitecrm/config_override.php.template && \
     echo '$sugar_config["twilio_auth_token"] = getenv("TWILIO_AUTH_TOKEN") ?: "";' >> /opt/bitnami/suitecrm/config_override.php.template && \
     echo '$sugar_config["twilio_phone_number"] = getenv("TWILIO_PHONE_NUMBER") ?: "";' >> /opt/bitnami/suitecrm/config_override.php.template && \
+    echo '$sugar_config["twilio_fallback_phone"] = getenv("TWILIO_FALLBACK_PHONE") ?: "";' >> /opt/bitnami/suitecrm/config_override.php.template && \
     echo '$sugar_config["twilio_enable_click_to_call"] = true;' >> /opt/bitnami/suitecrm/config_override.php.template && \
     echo '$sugar_config["twilio_enable_auto_logging"] = true;' >> /opt/bitnami/suitecrm/config_override.php.template && \
     echo '$sugar_config["twilio_enable_recordings"] = true;' >> /opt/bitnami/suitecrm/config_override.php.template && \
+    echo '$sugar_config["twilio_auto_create_lead"] = false;' >> /opt/bitnami/suitecrm/config_override.php.template && \
     chown daemon:daemon /opt/bitnami/suitecrm/config_override.php.template
 
 # Expose Bitnami default ports

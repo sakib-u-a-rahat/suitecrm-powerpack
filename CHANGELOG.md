@@ -5,6 +5,126 @@ All notable changes to SuiteCRM PowerPack will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [2.4.0] - 2025-12-05
+
+### Added - Security, Automation & Enhanced Features
+- **Security Enhancements**
+  - Webhook signature validation (X-Twilio-Signature) to prevent spoofing
+  - TwilioSecurity class with validateOrDie() method
+  - IP address validation against Twilio ranges
+  - Development mode bypass option (twilio_skip_validation)
+  - Protection against timing attacks with hash_equals()
+
+- **Recording Management**
+  - Automatic recording download after call completion
+  - TwilioRecordingManager class for file handling
+  - Recording stored locally with configurable retention
+  - Document creation in CRM with metadata
+  - Automatic attachment to Call records
+  - Recording webhook handler (recording_webhook view)
+  - MP3 format storage with proper naming convention
+  - .htaccess protection for recording directory
+
+- **SMS Auto-Follow-up System**
+  - TwilioScheduler class for automated tasks
+  - Detects unreplied SMS after configurable threshold (default: 24h)
+  - Creates high-priority follow-up tasks automatically
+  - Email notifications to assigned users
+  - SuiteCRM Scheduler integration (TwilioSchedulerJob)
+  - Cron job script (twilio_tasks.php)
+  - Prevents duplicate follow-up tasks
+
+- **Response Time Metrics**
+  - First response time calculation for inbound calls
+  - First response time calculation for inbound SMS
+  - Response time distribution buckets (0-15min, 15-60min, 1-4hr, 4-24hr, 24hr+)
+  - Average response time per user
+  - Response time trends over time
+  - Available via metrics API: `type=response_time`
+
+- **Maintenance & Cleanup**
+  - Automated recording cleanup after retention period
+  - Daily/weekly activity summary generation
+  - Configurable retention policies
+  - Scheduled maintenance tasks
+
+### Changed
+- view.webhook.php now validates Twilio signatures
+- view.sms_webhook.php now validates Twilio signatures
+- view.makecall.php includes recording callback URL
+- view.metrics.php expanded with response_time endpoint
+- controller.php registered new actions (recording_webhook, dashboard, bulksms)
+
+### Fixed
+- Webhook security vulnerability (no signature validation)
+- Call recordings expiring on Twilio CDN
+- SMS follow-ups not being tracked
+- Missing first response time metrics
+
+## [2.3.0] - 2025-12-03
+
+### Added - Complete Twilio Integration Rewrite
+- **Outbound Calls**
+  - Complete makecall view with dark theme UI
+  - Real-time call status updates with polling
+  - Call timer showing duration
+  - End call functionality
+  - Lead/Contact auto-detection from phone number
+  - Call logging to SuiteCRM Calls module
+  - TwiML generation for call routing
+
+- **SMS Messaging**
+  - Complete sendsms view with dark theme UI
+  - Character counter (1600 max)
+  - Quick template support
+  - Message delivery status tracking
+  - Lead/Contact auto-detection
+  - SMS logging to SuiteCRM Notes
+
+- **Inbound Call Handling**
+  - Voice webhook for incoming calls
+  - Caller ID lookup - matches to Lead/Contact
+  - Personalized greeting with caller's name
+  - BDM routing - connects to assigned user's phone
+  - Voicemail fallback when BDM unavailable
+  - Voicemail transcription support
+  - Missed call logging with auto-task creation
+
+- **Inbound SMS Handling**
+  - SMS webhook for incoming messages
+  - Auto-reply for STOP/START/HELP keywords
+  - SMS/MMS support with media attachments
+  - Follow-up task creation
+  - Optional auto-create lead for unknown numbers
+
+- **Dashboard Metrics API**
+  - `/index.php?module=TwilioIntegration&action=metrics`
+  - Call metrics: total, inbound, outbound, connected, missed
+  - SMS metrics: total sent/received
+  - Performance metrics by user
+  - Connect rate calculations
+  - Daily breakdown data for charts
+
+- **Configuration**
+  - Enhanced config view with dark theme
+  - Webhook URL generator with copy buttons
+  - Connection test button
+  - Fallback phone number setting
+  - Auto-create lead toggle
+  - Environment variable support
+
+- **Audit Logging**
+  - New `twilio_audit_log` table
+  - Logs all Twilio events with JSON data
+  - User tracking for actions
+  - Timestamp tracking
+
+### Fixed
+- Controller action mapping (no more "no action by that name" error)
+- Phone number formatting to E.164
+- Fetch credentials for same-origin requests
+- TwiML dial action completion handling
+
 ## [1.1.0] - 2025-11-20
 
 ### Fixed
