@@ -85,7 +85,7 @@ class FunnelDashboard extends Basic {
         
         $query = "SELECT l.status, COUNT(*) as count, SUM(o.amount) as total_value
                   FROM leads l
-                  LEFT JOIN opportunities o ON l.id = o.parent_id AND o.parent_type = 'Leads'
+                  LEFT JOIN opportunities o ON l.id = o.source_lead_id_c AND o.deleted = 0
                   WHERE l.deleted = 0 $categoryFilter $dateFilter
                   GROUP BY l.status
                   ORDER BY FIELD(l.status, 'New', 'Assigned', 'In Process', 'Converted', 'Recycled', 'Dead')";
@@ -113,7 +113,7 @@ class FunnelDashboard extends Basic {
         
         $query = "SELECT o.sales_stage, COUNT(*) as count, SUM(o.amount) as total_value
                   FROM opportunities o
-                  LEFT JOIN leads l ON o.parent_id = l.id AND o.parent_type = 'Leads'
+                  LEFT JOIN leads l ON o.source_lead_id_c = l.id AND l.deleted = 0
                   WHERE o.deleted = 0 $categoryFilter $dateFilter
                   GROUP BY o.sales_stage
                   ORDER BY FIELD(o.sales_stage, 'Prospecting', 'Qualification', 'Needs Analysis', 
@@ -230,7 +230,7 @@ class FunnelDashboard extends Basic {
                     COUNT(DISTINCT o.id) as opp_count,
                     SUM(CASE WHEN o.sales_stage = 'Closed Won' THEN o.amount ELSE 0 END) as won_amount
                   FROM leads l
-                  LEFT JOIN opportunities o ON l.id = o.parent_id AND o.parent_type = 'Leads' AND o.deleted = 0
+                  LEFT JOIN opportunities o ON l.id = o.source_lead_id_c AND o.deleted = 0
                   WHERE l.deleted = 0 
                   AND l.lead_source IS NOT NULL 
                   AND l.lead_source != ''

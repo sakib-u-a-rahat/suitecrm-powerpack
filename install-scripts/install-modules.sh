@@ -53,6 +53,11 @@ if [ -d "/bitnami/suitecrm/modules/TwilioIntegration/Extensions" ]; then
     cp -r /bitnami/suitecrm/modules/TwilioIntegration/Extensions/* /bitnami/suitecrm/public/legacy/custom/Extension/ 2>/dev/null || true
 fi
 
+# Copy main custom Extensions (includes PowerPackModules.php for nav display)
+if [ -d "/bitnami/suitecrm/custom/Extension" ]; then
+    cp -r /bitnami/suitecrm/custom/Extension/* /bitnami/suitecrm/public/legacy/custom/Extension/ 2>/dev/null || true
+fi
+
 # Create compiled language extension for dropdown lists
 mkdir -p /bitnami/suitecrm/public/legacy/custom/application/Ext/Language
 cat > /bitnami/suitecrm/public/legacy/custom/application/Ext/Language/en_us.lang.ext.php << 'PHPEOF'
