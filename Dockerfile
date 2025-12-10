@@ -18,6 +18,11 @@ RUN apt-get update && apt-get install -y \
 COPY --chown=daemon:daemon custom-modules/TwilioIntegration /opt/bitnami/suitecrm/modules/TwilioIntegration
 COPY --chown=daemon:daemon custom-modules/LeadJourney /opt/bitnami/suitecrm/modules/LeadJourney
 COPY --chown=daemon:daemon custom-modules/FunnelDashboard /opt/bitnami/suitecrm/modules/FunnelDashboard
+COPY --chown=daemon:daemon custom-modules/SalesTargets /opt/bitnami/suitecrm/modules/SalesTargets
+COPY --chown=daemon:daemon custom-modules/Packages /opt/bitnami/suitecrm/modules/Packages
+
+# Copy custom field extensions
+COPY --chown=daemon:daemon custom-modules/Extensions /opt/bitnami/suitecrm/custom/Extension
 
 # Copy custom extensions (click-to-call JS for Angular UI)
 COPY --chown=daemon:daemon config/custom-extensions/dist/twilio-click-to-call.js /opt/bitnami/suitecrm/dist/twilio-click-to-call.js
