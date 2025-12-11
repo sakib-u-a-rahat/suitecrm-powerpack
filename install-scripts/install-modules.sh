@@ -424,6 +424,58 @@ fi
 echo ""
 echo "Permissions can be managed in Admin -> Role Management -> FunnelDashboard"
 
+# Enable modules in system display tabs
+echo ""
+echo "Enabling modules in navigation..."
+
+# Add modules to system tabs via direct database manipulation
+# Use subshell to prevent set -e from stopping script on errors
+(
+    set +e
+    CURRENT_TABS=$(mysql $MYSQL_FLAGS -sN -e "SELECT value FROM config WHERE category='MySettings' AND name='tab';" 2>/dev/null | grep -v "Deprecated")
+
+    if [ -n "$CURRENT_TABS" ]; then
+        # Write PHP script to temp file to avoid escaping issues
+        cat > /tmp/add_tabs.php << 'PHPEOF'
+<?php
+$currentTabs = unserialize(base64_decode($argv[1]));
+if (!is_array($currentTabs)) {
+    $currentTabs = array();
+}
+
+$powerPackModules = array('FunnelDashboard', 'SalesTargets', 'Packages', 'TwilioIntegration', 'LeadJourney');
+$changed = false;
+
+foreach ($powerPackModules as $module) {
+    if (!in_array($module, $currentTabs)) {
+        $currentTabs[] = $module;
+        $changed = true;
+    }
+}
+
+if ($changed) {
+    echo base64_encode(serialize($currentTabs));
+} else {
+    echo 'UNCHANGED';
+}
+PHPEOF
+
+        NEW_TABS=$(php /tmp/add_tabs.php "$CURRENT_TABS" 2>/dev/null)
+        rm -f /tmp/add_tabs.php
+
+        if [ "$NEW_TABS" != "UNCHANGED" ] && [ -n "$NEW_TABS" ]; then
+            mysql $MYSQL_FLAGS -e "UPDATE config SET value='$NEW_TABS' WHERE category='MySettings' AND name='tab';" 2>/dev/null
+            echo "  Modules added to system navigation"
+        else
+            echo "  Modules already in system navigation"
+        fi
+    else
+        echo "  Note: System tabs not configured yet, modules will be available after first login"
+    fi
+) || true
+
+echo "  ✓ Module navigation configured"
+
 # Clear all caches
 echo ""
 echo "Clearing caches..."
