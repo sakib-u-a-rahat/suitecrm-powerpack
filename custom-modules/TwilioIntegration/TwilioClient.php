@@ -132,29 +132,42 @@ class TwilioClient {
     }
     
     /**
+     * Get base URL for Twilio callbacks (uses APP_URL env or falls back to site_url)
+     */
+    private function getBaseUrl() {
+        global $sugar_config;
+        $baseUrl = getenv('APP_URL');
+        if (empty($baseUrl)) {
+            $baseUrl = $sugar_config['site_url'] ?? '';
+        }
+        return rtrim($baseUrl, '/');
+    }
+
+    /**
      * Get TwiML URL for call handling
      */
     private function getTwiMLUrl() {
-        global $sugar_config;
-        $siteUrl = rtrim($sugar_config['site_url'], '/');
-        return $siteUrl . '/legacy/index.php?module=TwilioIntegration&action=twiml';
+        return $this->getBaseUrl() . '/legacy/index.php?module=TwilioIntegration&action=twiml';
     }
-    
+
     /**
      * Get webhook URL for call status updates
      */
     private function getWebhookUrl() {
-        global $sugar_config;
-        $siteUrl = rtrim($sugar_config['site_url'], '/');
-        return $siteUrl . '/legacy/index.php?module=TwilioIntegration&action=webhook';
+        return $this->getBaseUrl() . '/legacy/index.php?module=TwilioIntegration&action=webhook';
     }
-    
+
     /**
      * Get webhook URL for SMS status updates
      */
     private function getSMSWebhookUrl() {
-        global $sugar_config;
-        $siteUrl = rtrim($sugar_config['site_url'], '/');
-        return $siteUrl . '/legacy/index.php?module=TwilioIntegration&action=sms_webhook';
+        return $this->getBaseUrl() . '/legacy/index.php?module=TwilioIntegration&action=sms_webhook';
+    }
+
+    /**
+     * Get webhook URL for recording callbacks
+     */
+    public function getRecordingWebhookUrl() {
+        return $this->getBaseUrl() . '/legacy/index.php?module=TwilioIntegration&action=recording_webhook';
     }
 }

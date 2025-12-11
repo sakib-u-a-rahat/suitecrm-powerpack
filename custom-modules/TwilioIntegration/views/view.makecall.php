@@ -552,8 +552,10 @@ class TwilioIntegrationViewMakecall extends SugarView {
         
         try {
             global $sugar_config;
-            $siteUrl = rtrim($sugar_config['site_url'] ?? '', '/');
-            
+            // Use APP_URL env var for public webhook URLs (ngrok/production), fallback to site_url
+            $siteUrl = getenv('APP_URL') ?: rtrim($sugar_config['site_url'] ?? '', '/');
+            $siteUrl = rtrim($siteUrl, '/');
+
             $twimlUrl = $siteUrl . '/legacy/index.php?module=TwilioIntegration&action=twiml&type=dial&to=' . urlencode($to);
             $statusCallback = $siteUrl . '/legacy/index.php?module=TwilioIntegration&action=webhook';
             $recordingCallback = $siteUrl . '/legacy/index.php?module=TwilioIntegration&action=recording_webhook';

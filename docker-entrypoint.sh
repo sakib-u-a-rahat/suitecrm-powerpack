@@ -42,8 +42,9 @@ if [ ! -f "/bitnami/suitecrm/public/index.php" ]; then
     echo "Copying custom extensions..."
     if [ -f "/opt/bitnami/suitecrm/dist/twilio-click-to-call.js" ]; then
         echo "Installing Twilio click-to-call script for Angular UI..."
-        cp /opt/bitnami/suitecrm/dist/twilio-click-to-call.js /bitnami/suitecrm/public/dist/
-        
+        # Copy to public root (not dist/) since index.html uses relative path from root
+        cp /opt/bitnami/suitecrm/dist/twilio-click-to-call.js /bitnami/suitecrm/public/twilio-click-to-call.js
+
         # Inject script tag into index.html if not already present
         if [ -f "/bitnami/suitecrm/public/dist/index.html" ]; then
             if ! grep -q "twilio-click-to-call.js" /bitnami/suitecrm/public/dist/index.html; then
@@ -196,6 +197,12 @@ if [ -f "/bitnami/suitecrm/config.php" ]; then
     # Copy updated extension files
     if [ -d "/opt/bitnami/suitecrm/custom/Extension" ]; then
         cp -r /opt/bitnami/suitecrm/custom/Extension/* /bitnami/suitecrm/public/legacy/custom/Extension/ 2>/dev/null || true
+    fi
+
+    # Sync Twilio click-to-call JS to public root
+    if [ -f "/opt/bitnami/suitecrm/dist/twilio-click-to-call.js" ]; then
+        cp /opt/bitnami/suitecrm/dist/twilio-click-to-call.js /bitnami/suitecrm/public/twilio-click-to-call.js 2>/dev/null || true
+        chown daemon:daemon /bitnami/suitecrm/public/twilio-click-to-call.js 2>/dev/null || true
     fi
 
     # Re-run install script to update language files, module mappings, etc.

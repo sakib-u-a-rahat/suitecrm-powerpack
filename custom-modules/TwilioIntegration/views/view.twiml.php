@@ -52,10 +52,17 @@ class TwilioIntegrationViewTwiml extends SugarView
     /**
      * Handle outbound call - connect caller to destination
      */
+    private function getBaseUrl()
+    {
+        // Use APP_URL env var for public webhook URLs (ngrok/production), fallback to site_url
+        $baseUrl = getenv('APP_URL') ?: ($GLOBALS['sugar_config']['site_url'] ?? '');
+        return rtrim($baseUrl, '/');
+    }
+
     private function handleOutboundCall($to)
     {
         $config = TwilioIntegration::getConfig();
-        $siteUrl = $GLOBALS['sugar_config']['site_url'] ?? '';
+        $siteUrl = $this->getBaseUrl();
         
         // Clean phone number
         $to = $this->cleanPhoneNumber($to);
@@ -90,7 +97,7 @@ class TwilioIntegrationViewTwiml extends SugarView
     private function handleInboundCall($from, $to)
     {
         $config = TwilioIntegration::getConfig();
-        $siteUrl = $GLOBALS['sugar_config']['site_url'] ?? '';
+        $siteUrl = $this->getBaseUrl();
         
         // Try to find a lead/contact for this caller
         $leadInfo = $this->findLeadByPhone($from);
@@ -133,7 +140,7 @@ class TwilioIntegrationViewTwiml extends SugarView
     private function handleVoicemail($from)
     {
         $dialStatus = isset($_REQUEST['DialCallStatus']) ? $_REQUEST['DialCallStatus'] : '';
-        $siteUrl = $GLOBALS['sugar_config']['site_url'] ?? '';
+        $siteUrl = $this->getBaseUrl();
         
         $twiml = '<?xml version="1.0" encoding="UTF-8"?>';
         $twiml .= '<Response>';
@@ -211,7 +218,7 @@ class TwilioIntegrationViewTwiml extends SugarView
      */
     private function outputVoicemailTwiML($from, &$twiml)
     {
-        $siteUrl = $GLOBALS['sugar_config']['site_url'] ?? '';
+        $siteUrl = $this->getBaseUrl();
         $recordingUrl = $siteUrl . '/index.php?module=TwilioIntegration&action=twiml&dial_action=recording&from=' . urlencode($from);
         
         $twiml .= '<Say voice="Polly.Joanna">We are currently unavailable. Please leave a message after the tone, and we\'ll get back to you as soon as possible.</Say>';
