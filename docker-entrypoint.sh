@@ -48,7 +48,7 @@ if [ ! -f "/bitnami/suitecrm/public/index.php" ]; then
         if [ -f "/bitnami/suitecrm/public/dist/index.html" ]; then
             if ! grep -q "twilio-click-to-call.js" /bitnami/suitecrm/public/dist/index.html; then
                 echo "Injecting click-to-call script into Angular UI..."
-                sed -i 's|</body>|<script src="dist/twilio-click-to-call.js"></script>\n</body>|' /bitnami/suitecrm/public/dist/index.html
+                sed -i 's|</body>|<script src="twilio-click-to-call.js"></script>\n</body>|' /bitnami/suitecrm/public/dist/index.html
             fi
         fi
     fi

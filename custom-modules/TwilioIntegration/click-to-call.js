@@ -1,223 +1,181 @@
 /**
- * Twilio Click-to-Call Integration for SuiteCRM
- * Adds call and SMS buttons next to all phone numbers throughout the CRM
+ * Twilio Click-to-Call for SuiteCRM 8 Angular UI
+ * Adds call and SMS buttons next to phone numbers
+ * v2.2.5 - Simplified and more robust detection
  */
 (function() {
-    'use strict';
+    "use strict";
     
-    // Configuration
+    // Prevent multiple initializations
+    if (window.TWILIO_CTC_INIT) return;
+    window.TWILIO_CTC_INIT = true;
+    
     var CONFIG = {
-        moduleUrl: 'index.php?module=TwilioIntegration',
-        callAction: '&action=makecall&phone=',
-        smsAction: '&action=sendsms&phone=',
-        processedAttr: 'data-twilio-processed'
+        callUrl: "legacy/index.php?module=TwilioIntegration&action=makecall&phone=",
+        smsUrl: "legacy/index.php?module=TwilioIntegration&action=sendsms&phone=",
+        // US phone pattern: (xxx) xxx-xxxx or xxx-xxx-xxxx or +1xxxxxxxxxx
+        phonePattern: /^[\+]?1?[-.\s]?\(?[0-9]{3}\)?[-.\s]?[0-9]{3}[-.\s]?[0-9]{4}$/
     };
     
-    // Initialize
-    function init() {
-        console.log('[Twilio Click-to-Call] Initializing...');
-        processPage();
-        observeChanges();
-    }
+    console.log("[Twilio CTC] Script loaded v2.2.5");
     
-    // Process all phone fields on the page
-    function processPage() {
-        processInputFields();
-        processDetailFields();
-        processListViewCells();
-        processTelLinks();
-        processSpanFields();
-    }
-    
-    // Process phone input fields
-    function processInputFields() {
-        var inputs = document.querySelectorAll('input');
-        inputs.forEach(function(input) {
-            var name = (input.name || '').toLowerCase();
-            var id = (input.id || '').toLowerCase();
-            var type = input.type || '';
-            
-            if (!input.getAttribute(CONFIG.processedAttr)) {
-                var isPhoneField = name.indexOf('phone') >= 0 || 
-                                   name.indexOf('mobile') >= 0 || 
-                                   name.indexOf('fax') >= 0 ||
-                                   id.indexOf('phone') >= 0 || 
-                                   id.indexOf('mobile') >= 0 ||
-                                   type === 'tel';
-                
-                if (isPhoneField && input.value && isValidPhone(input.value)) {
-                    addButtons(input, input.value, 'afterend');
-                    input.setAttribute(CONFIG.processedAttr, 'true');
-                }
-            }
-        });
-    }
-    
-    // Process SuiteCRM span fields in detail views
-    function processSpanFields() {
-        // Target SuiteCRM detail view phone field spans
-        var selectors = [
-            'span[field="phone_work"]',
-            'span[field="phone_mobile"]',
-            'span[field="phone_office"]',
-            'span[field="phone_home"]',
-            'span[field="phone_other"]',
-            'span[field="phone_fax"]',
-            'span[data-field="phone_work"]',
-            'span[data-field="phone_mobile"]',
-            'span[data-field="phone_office"]'
-        ];
+    // Main function to scan and add buttons
+    function scanForPhoneNumbers() {
+        console.log("[Twilio CTC] Scanning for phone numbers...");
         
-        selectors.forEach(function(selector) {
-            document.querySelectorAll(selector).forEach(function(elem) {
-                if (!elem.getAttribute(CONFIG.processedAttr)) {
-                    var phone = elem.textContent.trim();
-                    if (phone && isValidPhone(phone)) {
-                        addButtons(elem, phone, 'afterend');
-                        elem.setAttribute(CONFIG.processedAttr, 'true');
-                    }
-                }
-            });
+        // Method 1: Find ALL links in table cells and check if they look like phone numbers
+        document.querySelectorAll("table tbody td a").forEach(function(link) {
+            processElement(link);
         });
-    }
-    
-    // Process detail view display fields
-    function processDetailFields() {
-        var elements = document.querySelectorAll('span, div, td');
-        elements.forEach(function(elem) {
-            if (elem.getAttribute(CONFIG.processedAttr)) return;
-            if (elem.querySelectorAll('.twilio-buttons').length > 0) return;
-            
-            var id = (elem.id || '').toLowerCase();
-            var className = (elem.className || '').toLowerCase();
-            
-            var isPhoneField = id.indexOf('phone') >= 0 || 
-                               id.indexOf('mobile') >= 0 ||
-                               className.indexOf('phone') >= 0;
-            
-            if (isPhoneField && elem.childNodes.length <= 2) {
-                var phone = elem.textContent.trim();
-                if (phone && isValidPhone(phone)) {
-                    addButtons(elem, phone, 'beforeend');
-                    elem.setAttribute(CONFIG.processedAttr, 'true');
-                }
-            }
+        
+        // Method 2: Find links inside scrm-field components
+        document.querySelectorAll("scrm-field a").forEach(function(link) {
+            processElement(link);
         });
-    }
-    
-    // Process list view table cells
-    function processListViewCells() {
-        var phoneColumnIndexes = [];
-        var headers = document.querySelectorAll('th, th a');
-        headers.forEach(function(th, index) {
-            var text = (th.textContent || '').toLowerCase();
-            if (text.indexOf('phone') >= 0 || text.indexOf('mobile') >= 0 || text.indexOf('fax') >= 0) {
-                var thElem = th.tagName === 'TH' ? th : th.closest('th');
-                if (thElem) {
-                    var thIndex = Array.from(thElem.parentNode.children).indexOf(thElem);
-                    if (phoneColumnIndexes.indexOf(thIndex) === -1) {
-                        phoneColumnIndexes.push(thIndex);
-                    }
+        
+        // Method 3: Find any standalone text that looks like a phone in table cells
+        document.querySelectorAll("table tbody td").forEach(function(cell) {
+            // Skip if already has buttons
+            if (cell.querySelector(".twilio-btns")) return;
+            if (cell.getAttribute("data-twilio-done")) return;
+            
+            // Check if cell has no links but has phone-like text
+            if (!cell.querySelector("a")) {
+                var text = cell.textContent.trim();
+                if (isPhoneNumber(text)) {
+                    console.log("[Twilio CTC] Found phone in cell text:", text);
+                    addButtonsToElement(cell, text);
                 }
             }
         });
         
-        if (phoneColumnIndexes.length > 0) {
-            var rows = document.querySelectorAll('tbody tr');
-            rows.forEach(function(row) {
-                var cells = row.querySelectorAll('td');
-                phoneColumnIndexes.forEach(function(colIndex) {
-                    var cell = cells[colIndex];
-                    if (cell && !cell.getAttribute(CONFIG.processedAttr)) {
-                        var phone = cell.textContent.trim();
-                        if (phone && isValidPhone(phone)) {
-                            addButtons(cell, phone, 'beforeend');
-                            cell.setAttribute(CONFIG.processedAttr, 'true');
-                        }
-                    }
-                });
+        // Method 4: Look for detail view phone fields
+        scanDetailView();
+    }
+    
+    function processElement(link) {
+        var text = link.textContent.trim();
+        
+        // Skip non-phone links
+        if (!isPhoneNumber(text)) return;
+        
+        // Skip if parent already processed
+        var parent = link.closest("td") || link.parentElement;
+        if (!parent) return;
+        if (parent.querySelector(".twilio-btns")) return;
+        if (parent.getAttribute("data-twilio-done")) return;
+        
+        console.log("[Twilio CTC] Found phone link:", text);
+        addButtonsAfterElement(link, text);
+        parent.setAttribute("data-twilio-done", "1");
+    }
+    
+    function scanDetailView() {
+        // Find phone fields in record/detail views by label
+        var phoneLabels = ["phone", "mobile", "office phone", "work phone", "home phone", "fax"];
+        
+        document.querySelectorAll("label").forEach(function(label) {
+            var labelText = label.textContent.toLowerCase().trim();
+            var isPhoneLabel = phoneLabels.some(function(p) {
+                return labelText.indexOf(p) !== -1;
             });
+            
+            if (!isPhoneLabel) return;
+            
+            // Find associated value - check siblings and parent containers
+            var container = label.closest(".form-group") || label.closest("[class*='field']") || label.parentElement;
+            if (!container) return;
+            if (container.querySelector(".twilio-btns")) return;
+            
+            // Look for value in container
+            var valueEl = container.querySelector("span:not(.twilio-btns)") || 
+                          container.querySelector("a") ||
+                          container.querySelector("[class*='value']");
+            
+            if (valueEl) {
+                var phone = valueEl.textContent.trim();
+                if (isPhoneNumber(phone)) {
+                    console.log("[Twilio CTC] Found phone in detail view:", phone);
+                    addButtonsAfterElement(valueEl, phone);
+                }
+            }
+        });
+    }
+    
+    function isPhoneNumber(text) {
+        if (!text || typeof text !== "string") return false;
+        text = text.trim();
+        
+        // Remove all non-digits to count
+        var digits = text.replace(/\D/g, "");
+        
+        // Must have 10-11 digits (with or without country code)
+        if (digits.length < 10 || digits.length > 11) return false;
+        
+        // Must match phone-like pattern
+        return CONFIG.phonePattern.test(text) || 
+               /^\d{10,11}$/.test(digits) ||
+               /^\(\d{3}\)\s*\d{3}[-.]?\d{4}$/.test(text) ||
+               /^\d{3}[-.\s]\d{3}[-.\s]\d{4}$/.test(text);
+    }
+    
+    function addButtonsToElement(element, phone) {
+        var btns = createButtons(phone);
+        element.appendChild(btns);
+    }
+    
+    function addButtonsAfterElement(element, phone) {
+        var btns = createButtons(phone);
+        if (element.nextSibling) {
+            element.parentNode.insertBefore(btns, element.nextSibling);
+        } else {
+            element.parentNode.appendChild(btns);
         }
     }
     
-    // Process tel: links
-    function processTelLinks() {
-        var links = document.querySelectorAll('a');
-        links.forEach(function(link) {
-            if (link.href && link.href.indexOf('tel:') === 0 && !link.getAttribute(CONFIG.processedAttr)) {
-                var phone = link.href.replace('tel:', '').trim();
-                if (phone && isValidPhone(phone)) {
-                    addButtons(link, phone, 'afterend');
-                    link.setAttribute(CONFIG.processedAttr, 'true');
-                }
-            }
-        });
-    }
-    
-    // Validate phone number
-    function isValidPhone(str) {
-        if (!str || typeof str !== 'string') return false;
-        var cleaned = str.replace(/[\s\-().]/g, '');
-        return cleaned.length >= 7 && cleaned.length <= 20 && /^\+?\d+$/.test(cleaned);
-    }
-    
-    // Add call and SMS buttons
-    function addButtons(element, phone, position) {
-        var container = document.createElement('span');
-        container.className = 'twilio-buttons';
-        container.style.cssText = 'display:inline-flex;gap:3px;margin-left:8px;vertical-align:middle;';
+    function createButtons(phone) {
+        var container = document.createElement("span");
+        container.className = "twilio-btns";
+        container.style.cssText = "display:inline-flex;gap:4px;margin-left:8px;vertical-align:middle;";
         
         // Call button
-        var callBtn = document.createElement('button');
-        callBtn.type = 'button';
-        callBtn.className = 'btn btn-xs btn-success twilio-call-btn';
-        callBtn.title = 'Call ' + phone;
-        callBtn.innerHTML = '&#x1F4DE; Call';
-        callBtn.style.cssText = 'cursor:pointer;padding:2px 8px;font-size:11px;';
+        var callBtn = document.createElement("button");
+        callBtn.type = "button";
+        callBtn.title = "Call " + phone;
+        callBtn.innerHTML = "📞";
+        callBtn.style.cssText = "cursor:pointer;padding:3px 7px;background:#4a90d9;color:#fff;border:none;border-radius:3px;font-size:13px;line-height:1;";
         callBtn.onclick = function(e) {
             e.preventDefault();
             e.stopPropagation();
-            openWindow(CONFIG.moduleUrl + CONFIG.callAction + encodeURIComponent(phone), 'TwilioCall', 500, 400);
+            var url = CONFIG.callUrl + encodeURIComponent(phone);
+            window.open(url, "TwilioCall", "width=450,height=350,scrollbars=yes,resizable=yes");
         };
         
-        // SMS button  
-        var smsBtn = document.createElement('button');
-        smsBtn.type = 'button';
-        smsBtn.className = 'btn btn-xs btn-primary twilio-sms-btn';
-        smsBtn.title = 'SMS ' + phone;
-        smsBtn.innerHTML = '&#x1F4AC; SMS';
-        smsBtn.style.cssText = 'cursor:pointer;padding:2px 8px;font-size:11px;';
+        // SMS button
+        var smsBtn = document.createElement("button");
+        smsBtn.type = "button";
+        smsBtn.title = "SMS " + phone;
+        smsBtn.innerHTML = "💬";
+        smsBtn.style.cssText = "cursor:pointer;padding:3px 7px;background:#4a90d9;color:#fff;border:none;border-radius:3px;font-size:13px;line-height:1;";
         smsBtn.onclick = function(e) {
             e.preventDefault();
             e.stopPropagation();
-            openWindow(CONFIG.moduleUrl + CONFIG.smsAction + encodeURIComponent(phone), 'TwilioSMS', 500, 500);
+            var url = CONFIG.smsUrl + encodeURIComponent(phone);
+            window.open(url, "TwilioSMS", "width=450,height=400,scrollbars=yes,resizable=yes");
         };
         
         container.appendChild(callBtn);
         container.appendChild(smsBtn);
-        
-        if (position === 'beforeend') {
-            element.appendChild(container);
-        } else {
-            element.insertAdjacentElement(position, container);
-        }
+        return container;
     }
     
-    // Open popup window
-    function openWindow(url, name, width, height) {
-        var left = (screen.width - width) / 2;
-        var top = (screen.height - height) / 2;
-        window.open(url, name, 'width=' + width + ',height=' + height + ',left=' + left + ',top=' + top + ',scrollbars=yes,resizable=yes');
-    }
-    
-    // Watch for DOM changes (AJAX content)
-    function observeChanges() {
-        if (typeof MutationObserver === 'undefined') return;
-        
-        var debounceTimer;
+    // Watch for DOM changes (Angular route changes)
+    function startObserver() {
+        var timeout = null;
         var observer = new MutationObserver(function(mutations) {
-            clearTimeout(debounceTimer);
-            debounceTimer = setTimeout(processPage, 200);
+            // Debounce - wait for DOM to settle
+            clearTimeout(timeout);
+            timeout = setTimeout(scanForPhoneNumbers, 500);
         });
         
         observer.observe(document.body, {
@@ -226,14 +184,25 @@
         });
     }
     
+    // Initialize
+    function init() {
+        console.log("[Twilio CTC] Initializing...");
+        
+        // Initial scan after page loads
+        setTimeout(scanForPhoneNumbers, 1500);
+        
+        // Re-scan periodically for Angular route changes
+        setTimeout(scanForPhoneNumbers, 3000);
+        setTimeout(scanForPhoneNumbers, 5000);
+        
+        // Watch for DOM changes
+        startObserver();
+    }
+    
     // Start when DOM is ready
-    if (document.readyState === 'loading') {
-        document.addEventListener('DOMContentLoaded', init);
+    if (document.readyState === "loading") {
+        document.addEventListener("DOMContentLoaded", init);
     } else {
         init();
     }
-    
-    // Also run after delays to catch late-loading content
-    setTimeout(processPage, 1000);
-    setTimeout(processPage, 3000);
 })();

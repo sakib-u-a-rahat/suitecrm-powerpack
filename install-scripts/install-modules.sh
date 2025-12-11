@@ -783,6 +783,37 @@ PHPEOF
 
 echo "  ✓ Module navigation configured"
 
+# Install Twilio click-to-call script for SuiteCRM 8 Angular UI
+echo ""
+echo "Installing Twilio click-to-call for Angular UI..."
+if [ -f "/opt/bitnami/suitecrm/dist/twilio-click-to-call.js" ]; then
+    cp /opt/bitnami/suitecrm/dist/twilio-click-to-call.js /bitnami/suitecrm/public/dist/
+    
+    # Inject script tag into index.html if not already present
+    if [ -f "/bitnami/suitecrm/public/dist/index.html" ]; then
+        if ! grep -q "twilio-click-to-call.js" /bitnami/suitecrm/public/dist/index.html; then
+            sed -i 's|</body>|<script src="twilio-click-to-call.js"></script>\n</body>|' /bitnami/suitecrm/public/dist/index.html
+            echo "  ✓ Click-to-call script injected into Angular UI"
+        else
+            echo "  Click-to-call script already present"
+        fi
+    else
+        echo "  ⚠ Angular index.html not found - click-to-call may not work"
+    fi
+elif [ -f "/bitnami/suitecrm/modules/TwilioIntegration/click-to-call.js" ]; then
+    # Fallback: copy from module directory
+    cp /bitnami/suitecrm/modules/TwilioIntegration/click-to-call.js /bitnami/suitecrm/public/dist/twilio-click-to-call.js
+    
+    if [ -f "/bitnami/suitecrm/public/dist/index.html" ]; then
+        if ! grep -q "twilio-click-to-call.js" /bitnami/suitecrm/public/dist/index.html; then
+            sed -i 's|</body>|<script src="twilio-click-to-call.js"></script>\n</body>|' /bitnami/suitecrm/public/dist/index.html
+            echo "  ✓ Click-to-call script injected (from module)"
+        fi
+    fi
+else
+    echo "  ⚠ Click-to-call script source not found"
+fi
+
 # Clear all caches
 echo ""
 echo "Clearing caches..."
