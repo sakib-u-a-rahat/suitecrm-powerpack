@@ -92,6 +92,13 @@ $app_list_strings['lead_journey_parent_type_list'] = array(
     'Accounts' => 'Account',
     'Opportunities' => 'Opportunity',
 );
+
+// PowerPack module display names for navigation
+$app_list_strings['moduleList']['FunnelDashboard'] = 'Funnel Dashboard';
+$app_list_strings['moduleList']['SalesTargets'] = 'Sales Targets';
+$app_list_strings['moduleList']['Packages'] = 'Packages';
+$app_list_strings['moduleList']['TwilioIntegration'] = 'Twilio Integration';
+$app_list_strings['moduleList']['LeadJourney'] = 'Lead Journey';
 PHPEOF
 
 # Create module registration files directly
