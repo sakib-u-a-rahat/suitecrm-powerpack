@@ -163,32 +163,59 @@ MODULE_ROUTING_FILE="/bitnami/suitecrm/config/services/module/module_routing.yam
 if [ -f "$MODULE_ROUTING_FILE" ]; then
     # Check if our modules are already added
     if ! grep -q "funnel-dashboard:" "$MODULE_ROUTING_FILE"; then
-        # Append module routing with proper indentation (4 spaces for keys under parameters.legacy.module_routing)
-        cat >> "$MODULE_ROUTING_FILE" << 'YAMLEOF'
+        # Backup original file
+        cp "$MODULE_ROUTING_FILE" "${MODULE_ROUTING_FILE}.backup"
+        
+        # Get the indentation used in the file (count leading spaces on a module line)
+        INDENT=$(grep -E "^\s+[a-z]+-?[a-z]*:" "$MODULE_ROUTING_FILE" | head -1 | sed 's/[^ ].*//' | wc -c)
+        INDENT=$((INDENT - 1))
+        if [ "$INDENT" -lt 2 ]; then
+            INDENT=4  # Default to 4 spaces if detection fails
+        fi
+        
+        # Create indentation strings
+        SPACES=$(printf '%*s' "$INDENT" '')
+        SPACES2=$(printf '%*s' "$((INDENT + 2))" '')
+        
+        # Append module routing with detected indentation
+        cat >> "$MODULE_ROUTING_FILE" << YAMLEOF
 
-    # PowerPack Modules
-    funnel-dashboard:
-      index: true
-      list: true
-      record: false
-    sales-targets:
-      index: true
-      list: true
-      record: true
-    packages:
-      index: true
-      list: true
-      record: true
-    twilio-integration:
-      index: true
-      list: true
-      record: false
-    lead-journey:
-      index: true
-      list: true
-      record: true
+${SPACES}# PowerPack Modules
+${SPACES}funnel-dashboard:
+${SPACES2}index: true
+${SPACES2}list: true
+${SPACES2}record: false
+${SPACES}sales-targets:
+${SPACES2}index: true
+${SPACES2}list: true
+${SPACES2}record: true
+${SPACES}packages:
+${SPACES2}index: true
+${SPACES2}list: true
+${SPACES2}record: true
+${SPACES}twilio-integration:
+${SPACES2}index: true
+${SPACES2}list: true
+${SPACES2}record: false
+${SPACES}lead-journey:
+${SPACES2}index: true
+${SPACES2}list: true
+${SPACES2}record: true
 YAMLEOF
-        echo "  ✓ Module routing configured"
+        
+        # Validate YAML syntax (if python3 available)
+        if command -v python3 &> /dev/null; then
+            if ! python3 -c "import yaml; yaml.safe_load(open('$MODULE_ROUTING_FILE'))" 2>/dev/null; then
+                echo "  ⚠ YAML validation failed, restoring backup"
+                cp "${MODULE_ROUTING_FILE}.backup" "$MODULE_ROUTING_FILE"
+                echo "  Module routing NOT configured (YAML error)"
+            else
+                echo "  ✓ Module routing configured"
+                rm -f "${MODULE_ROUTING_FILE}.backup"
+            fi
+        else
+            echo "  ✓ Module routing configured (unvalidated)"
+        fi
     else
         echo "  Module routing already configured"
     fi

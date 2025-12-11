@@ -3,20 +3,19 @@ if (!defined('sugarEntry') || !sugarEntry) {
     die('Not A Valid Entry Point');
 }
 
-require_once('include/MVC/View/SugarView.php');
+require_once('include/MVC/View/views/view.list.php');
 
 /**
  * FunnelDashboard Index View
  * 
- * This view is called by SuiteCRM 8's Angular frontend when navigating to the module.
- * It redirects to the main dashboard view for a better user experience.
+ * Default view when navigating to the FunnelDashboard module.
+ * Shows the standard list view - users can navigate to dashboards via menu.
  */
-class FunnelDashboardViewIndex extends SugarView
+class FunnelDashboardViewIndex extends ViewList
 {
-    public function display()
+    public function __construct()
     {
-        // Redirect to the main dashboard view
-        header('Location: index.php?module=FunnelDashboard&action=dashboard');
-        exit;
+        parent::__construct();
+        $this->options['show_title'] = true;
     }
 }
