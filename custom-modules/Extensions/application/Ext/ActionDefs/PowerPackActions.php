@@ -1,7 +1,6 @@
 <?php
-if (!defined('sugarEntry') || !sugarEntry) {
-    die('Not A Valid Entry Point');
-}
+// PowerPack Custom ACL Actions
+// Note: No die() check - this file is compiled into ext.php
 
 /**
  * PowerPack Custom ACL Actions

@@ -1,5 +1,6 @@
 <?php
-if(!defined('sugarEntry') || !sugarEntry) die('Not A Valid Entry Point');
+// PowerPack Opportunities Custom Fields
+// Note: No die() check - this file is compiled into vardefs.ext.php
 
 // Funnel Type - Inherited from lead or set directly
 $dictionary['Opportunity']['fields']['funnel_type_c'] = array(

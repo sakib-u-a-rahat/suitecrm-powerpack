@@ -1,5 +1,6 @@
 <?php
-if (!defined('sugarEntry') || !sugarEntry) die('Not A Valid Entry Point');
+// PowerPack Module Registration
+// Note: No die() check - this file is compiled into ext.php
 
 // Add PowerPack modules to displayed module list
 global $moduleList;
