@@ -163,7 +163,10 @@ MODULE_ROUTING_FILE="/bitnami/suitecrm/config/services/module/module_routing.yam
 if [ -f "$MODULE_ROUTING_FILE" ]; then
     # Check if our modules are already added
     if ! grep -q "funnel-dashboard:" "$MODULE_ROUTING_FILE"; then
+        # Append module routing with proper indentation (4 spaces for keys under parameters.legacy.module_routing)
         cat >> "$MODULE_ROUTING_FILE" << 'YAMLEOF'
+
+    # PowerPack Modules
     funnel-dashboard:
       index: true
       list: true
@@ -258,6 +261,9 @@ else
     SSL_OPTS="--skip-ssl"
     echo "Using standard database connection (SSL disabled)..."
 fi
+
+# Define MYSQL_FLAGS for use throughout the script
+MYSQL_FLAGS="-h$SUITECRM_DATABASE_HOST -P$DB_PORT -u$SUITECRM_DATABASE_USER -p$SUITECRM_DATABASE_PASSWORD $SSL_OPTS $SUITECRM_DATABASE_NAME"
 
 # Check if tables already exist
 TABLES_EXIST=$(mysql -h"$SUITECRM_DATABASE_HOST" -P"$DB_PORT" -u"$SUITECRM_DATABASE_USER" -p"$SUITECRM_DATABASE_PASSWORD" $SSL_OPTS "$SUITECRM_DATABASE_NAME" -sN -e "SELECT COUNT(*) FROM information_schema.tables WHERE table_schema='$SUITECRM_DATABASE_NAME' AND table_name IN ('twilio_integration', 'twilio_audit_log', 'lead_journey', 'funnel_dashboard', 'sales_targets', 'packages');" 2>/dev/null || echo "0")
@@ -450,11 +456,118 @@ EOF
     echo "Database tables and custom fields setup complete"
 fi
 
-# Register custom ACL actions for FunnelDashboard
+# Register standard and custom ACL actions for PowerPack modules
 echo ""
-echo "Registering ACL actions for role-based permissions..."
+echo "Registering ACL actions for PowerPack modules..."
 
-# Check if custom actions exist
+# Add standard ACL actions for all PowerPack modules (required for SuiteCRM 8 navigation)
+STANDARD_ACL_EXISTS=$(mysql -h"$SUITECRM_DATABASE_HOST" -P"$DB_PORT" -u"$SUITECRM_DATABASE_USER" -p"$SUITECRM_DATABASE_PASSWORD" $SSL_OPTS "$SUITECRM_DATABASE_NAME" -sN -e "
+    SELECT COUNT(*) FROM acl_actions
+    WHERE category='FunnelDashboard' AND name='access' AND deleted=0
+" 2>/dev/null || echo "0")
+
+if [ "$STANDARD_ACL_EXISTS" = "0" ]; then
+    echo "  Adding standard ACL actions for all PowerPack modules..."
+    mysql -h"$SUITECRM_DATABASE_HOST" -P"$DB_PORT" -u"$SUITECRM_DATABASE_USER" -p"$SUITECRM_DATABASE_PASSWORD" $SSL_OPTS "$SUITECRM_DATABASE_NAME" <<'EOF'
+-- Standard ACL actions for PowerPack modules (required for SuiteCRM 8 to show them in navigation)
+-- These actions allow admins to control access via Role Management
+
+-- FunnelDashboard standard actions
+INSERT INTO acl_actions (id, date_entered, date_modified, modified_user_id, created_by, name, category, acltype, aclaccess, deleted)
+SELECT UUID(), NOW(), NOW(), '1', '1', 'access', 'FunnelDashboard', 'module', 89, 0
+FROM DUAL WHERE NOT EXISTS (SELECT 1 FROM acl_actions WHERE category='FunnelDashboard' AND name='access' AND deleted=0);
+
+INSERT INTO acl_actions (id, date_entered, date_modified, modified_user_id, created_by, name, category, acltype, aclaccess, deleted)
+SELECT UUID(), NOW(), NOW(), '1', '1', 'view', 'FunnelDashboard', 'module', 90, 0
+FROM DUAL WHERE NOT EXISTS (SELECT 1 FROM acl_actions WHERE category='FunnelDashboard' AND name='view' AND deleted=0);
+
+INSERT INTO acl_actions (id, date_entered, date_modified, modified_user_id, created_by, name, category, acltype, aclaccess, deleted)
+SELECT UUID(), NOW(), NOW(), '1', '1', 'list', 'FunnelDashboard', 'module', 90, 0
+FROM DUAL WHERE NOT EXISTS (SELECT 1 FROM acl_actions WHERE category='FunnelDashboard' AND name='list' AND deleted=0);
+
+-- SalesTargets standard actions
+INSERT INTO acl_actions (id, date_entered, date_modified, modified_user_id, created_by, name, category, acltype, aclaccess, deleted)
+SELECT UUID(), NOW(), NOW(), '1', '1', 'access', 'SalesTargets', 'module', 89, 0
+FROM DUAL WHERE NOT EXISTS (SELECT 1 FROM acl_actions WHERE category='SalesTargets' AND name='access' AND deleted=0);
+
+INSERT INTO acl_actions (id, date_entered, date_modified, modified_user_id, created_by, name, category, acltype, aclaccess, deleted)
+SELECT UUID(), NOW(), NOW(), '1', '1', 'view', 'SalesTargets', 'module', 90, 0
+FROM DUAL WHERE NOT EXISTS (SELECT 1 FROM acl_actions WHERE category='SalesTargets' AND name='view' AND deleted=0);
+
+INSERT INTO acl_actions (id, date_entered, date_modified, modified_user_id, created_by, name, category, acltype, aclaccess, deleted)
+SELECT UUID(), NOW(), NOW(), '1', '1', 'list', 'SalesTargets', 'module', 90, 0
+FROM DUAL WHERE NOT EXISTS (SELECT 1 FROM acl_actions WHERE category='SalesTargets' AND name='list' AND deleted=0);
+
+INSERT INTO acl_actions (id, date_entered, date_modified, modified_user_id, created_by, name, category, acltype, aclaccess, deleted)
+SELECT UUID(), NOW(), NOW(), '1', '1', 'edit', 'SalesTargets', 'module', 90, 0
+FROM DUAL WHERE NOT EXISTS (SELECT 1 FROM acl_actions WHERE category='SalesTargets' AND name='edit' AND deleted=0);
+
+INSERT INTO acl_actions (id, date_entered, date_modified, modified_user_id, created_by, name, category, acltype, aclaccess, deleted)
+SELECT UUID(), NOW(), NOW(), '1', '1', 'delete', 'SalesTargets', 'module', 90, 0
+FROM DUAL WHERE NOT EXISTS (SELECT 1 FROM acl_actions WHERE category='SalesTargets' AND name='delete' AND deleted=0);
+
+-- Packages standard actions
+INSERT INTO acl_actions (id, date_entered, date_modified, modified_user_id, created_by, name, category, acltype, aclaccess, deleted)
+SELECT UUID(), NOW(), NOW(), '1', '1', 'access', 'Packages', 'module', 89, 0
+FROM DUAL WHERE NOT EXISTS (SELECT 1 FROM acl_actions WHERE category='Packages' AND name='access' AND deleted=0);
+
+INSERT INTO acl_actions (id, date_entered, date_modified, modified_user_id, created_by, name, category, acltype, aclaccess, deleted)
+SELECT UUID(), NOW(), NOW(), '1', '1', 'view', 'Packages', 'module', 90, 0
+FROM DUAL WHERE NOT EXISTS (SELECT 1 FROM acl_actions WHERE category='Packages' AND name='view' AND deleted=0);
+
+INSERT INTO acl_actions (id, date_entered, date_modified, modified_user_id, created_by, name, category, acltype, aclaccess, deleted)
+SELECT UUID(), NOW(), NOW(), '1', '1', 'list', 'Packages', 'module', 90, 0
+FROM DUAL WHERE NOT EXISTS (SELECT 1 FROM acl_actions WHERE category='Packages' AND name='list' AND deleted=0);
+
+INSERT INTO acl_actions (id, date_entered, date_modified, modified_user_id, created_by, name, category, acltype, aclaccess, deleted)
+SELECT UUID(), NOW(), NOW(), '1', '1', 'edit', 'Packages', 'module', 90, 0
+FROM DUAL WHERE NOT EXISTS (SELECT 1 FROM acl_actions WHERE category='Packages' AND name='edit' AND deleted=0);
+
+INSERT INTO acl_actions (id, date_entered, date_modified, modified_user_id, created_by, name, category, acltype, aclaccess, deleted)
+SELECT UUID(), NOW(), NOW(), '1', '1', 'delete', 'Packages', 'module', 90, 0
+FROM DUAL WHERE NOT EXISTS (SELECT 1 FROM acl_actions WHERE category='Packages' AND name='delete' AND deleted=0);
+
+-- TwilioIntegration standard actions
+INSERT INTO acl_actions (id, date_entered, date_modified, modified_user_id, created_by, name, category, acltype, aclaccess, deleted)
+SELECT UUID(), NOW(), NOW(), '1', '1', 'access', 'TwilioIntegration', 'module', 89, 0
+FROM DUAL WHERE NOT EXISTS (SELECT 1 FROM acl_actions WHERE category='TwilioIntegration' AND name='access' AND deleted=0);
+
+INSERT INTO acl_actions (id, date_entered, date_modified, modified_user_id, created_by, name, category, acltype, aclaccess, deleted)
+SELECT UUID(), NOW(), NOW(), '1', '1', 'view', 'TwilioIntegration', 'module', 90, 0
+FROM DUAL WHERE NOT EXISTS (SELECT 1 FROM acl_actions WHERE category='TwilioIntegration' AND name='view' AND deleted=0);
+
+INSERT INTO acl_actions (id, date_entered, date_modified, modified_user_id, created_by, name, category, acltype, aclaccess, deleted)
+SELECT UUID(), NOW(), NOW(), '1', '1', 'list', 'TwilioIntegration', 'module', 90, 0
+FROM DUAL WHERE NOT EXISTS (SELECT 1 FROM acl_actions WHERE category='TwilioIntegration' AND name='list' AND deleted=0);
+
+-- LeadJourney standard actions
+INSERT INTO acl_actions (id, date_entered, date_modified, modified_user_id, created_by, name, category, acltype, aclaccess, deleted)
+SELECT UUID(), NOW(), NOW(), '1', '1', 'access', 'LeadJourney', 'module', 89, 0
+FROM DUAL WHERE NOT EXISTS (SELECT 1 FROM acl_actions WHERE category='LeadJourney' AND name='access' AND deleted=0);
+
+INSERT INTO acl_actions (id, date_entered, date_modified, modified_user_id, created_by, name, category, acltype, aclaccess, deleted)
+SELECT UUID(), NOW(), NOW(), '1', '1', 'view', 'LeadJourney', 'module', 90, 0
+FROM DUAL WHERE NOT EXISTS (SELECT 1 FROM acl_actions WHERE category='LeadJourney' AND name='view' AND deleted=0);
+
+INSERT INTO acl_actions (id, date_entered, date_modified, modified_user_id, created_by, name, category, acltype, aclaccess, deleted)
+SELECT UUID(), NOW(), NOW(), '1', '1', 'list', 'LeadJourney', 'module', 90, 0
+FROM DUAL WHERE NOT EXISTS (SELECT 1 FROM acl_actions WHERE category='LeadJourney' AND name='list' AND deleted=0);
+
+INSERT INTO acl_actions (id, date_entered, date_modified, modified_user_id, created_by, name, category, acltype, aclaccess, deleted)
+SELECT UUID(), NOW(), NOW(), '1', '1', 'edit', 'LeadJourney', 'module', 90, 0
+FROM DUAL WHERE NOT EXISTS (SELECT 1 FROM acl_actions WHERE category='LeadJourney' AND name='edit' AND deleted=0);
+
+INSERT INTO acl_actions (id, date_entered, date_modified, modified_user_id, created_by, name, category, acltype, aclaccess, deleted)
+SELECT UUID(), NOW(), NOW(), '1', '1', 'delete', 'LeadJourney', 'module', 90, 0
+FROM DUAL WHERE NOT EXISTS (SELECT 1 FROM acl_actions WHERE category='LeadJourney' AND name='delete' AND deleted=0);
+
+EOF
+    echo "  ✓ Standard ACL actions registered"
+else
+    echo "  Standard ACL actions already exist"
+fi
+
+# Check if custom FunnelDashboard dashboard actions exist
 ACTION_EXISTS=$(mysql -h"$SUITECRM_DATABASE_HOST" -P"$DB_PORT" -u"$SUITECRM_DATABASE_USER" -p"$SUITECRM_DATABASE_PASSWORD" $SSL_OPTS "$SUITECRM_DATABASE_NAME" -sN -e "
     SELECT COUNT(*) FROM acl_actions
     WHERE category='FunnelDashboard' AND name='crodashboard' AND deleted=0

@@ -7,6 +7,15 @@ if (!defined('sugarEntry') || !sugarEntry) {
 class FunnelDashboardController extends SugarController
 {
     /**
+     * Index action - redirect to main dashboard
+     * This is called by SuiteCRM 8's Angular frontend when navigating to the module
+     */
+    public function action_index()
+    {
+        $this->view = 'dashboard';
+    }
+
+    /**
      * Default dashboard view
      */
     public function action_dashboard()

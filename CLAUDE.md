@@ -4,7 +4,7 @@
 
 **Repository**: `mahir009/suitecrm-powerpack`
 **Docker Hub**: `mahir009/suitecrm-powerpack`
-**Current Version**: v2.5.7
+**Current Version**: v2.5.8
 **Base Image**: Bitnami SuiteCRM (SuiteCRM 8 with Angular frontend + Legacy PHP)
 
 This is a Docker-based SuiteCRM extension with five custom modules for sales operations:
@@ -325,6 +325,13 @@ docker push mahir009/suitecrm-powerpack:latest
 
 ## Version History (Recent)
 
+- **v2.5.8** - Fix FunnelDashboard not showing in production:
+  - Add view.index.php to redirect index action to dashboard
+  - Add action_index() to controller for SuiteCRM 8 Angular navigation
+  - Fix MYSQL_FLAGS undefined variable in install-modules.sh
+  - Add standard ACL actions (access, view, list) for all PowerPack modules
+  - Fix module_routing.yaml indentation for proper YAML append
+  - Fix bean_implements() to properly enable ACL
 - **v2.5.7** - Fix module display names in navigation (moduleList entries)
 - **v2.5.6** - Fix SuiteCRM 8 Angular navigation (module_name_map.php)
 - **v2.5.5** - Add SuiteCRM 8 module routing (module_routing.yaml)
