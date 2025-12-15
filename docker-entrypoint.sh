@@ -208,10 +208,13 @@ fi
 if [ -f "/bitnami/suitecrm/config.php" ]; then
     echo "Syncing PowerPack module files..."
 
-    # Copy updated module files from image
+    # Copy updated module files from image (clean copy - remove old first)
     for MODULE in TwilioIntegration LeadJourney FunnelDashboard SalesTargets Packages; do
         if [ -d "/opt/bitnami/suitecrm/modules/$MODULE" ]; then
+            # Remove old module directory to ensure clean copy
+            rm -rf "/bitnami/suitecrm/public/legacy/modules/$MODULE" 2>/dev/null || true
             cp -r "/opt/bitnami/suitecrm/modules/$MODULE" "/bitnami/suitecrm/public/legacy/modules/" 2>/dev/null || true
+            echo "Synced module: $MODULE"
         fi
     done
 

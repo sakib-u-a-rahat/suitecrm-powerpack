@@ -77,7 +77,7 @@ class TwilioIntegrationViewWebhook extends SugarView
         
         if (!empty($bdmPhone)) {
             // Route to BDM with voicemail fallback
-            $voicemailAction = $siteUrl . '/index.php?module=TwilioIntegration&action=twiml&dial_action=voicemail&from=' . urlencode($from);
+            $voicemailAction = $siteUrl . '/legacy/twilio_webhook.php?action=twiml&dial_action=voicemail&from=' . urlencode($from);
             
             $twiml .= '<Say voice="Polly.Joanna">Please hold while I connect you to your representative.</Say>';
             $twiml .= '<Dial timeout="25" action="' . htmlspecialchars($voicemailAction) . '" method="POST">';
@@ -85,7 +85,7 @@ class TwilioIntegrationViewWebhook extends SugarView
             $twiml .= '</Dial>';
         } else {
             // No BDM - go to general voicemail
-            $recordingAction = $siteUrl . '/index.php?module=TwilioIntegration&action=twiml&dial_action=recording&from=' . urlencode($from);
+            $recordingAction = $siteUrl . '/legacy/twilio_webhook.php?action=twiml&dial_action=recording&from=' . urlencode($from);
             
             $twiml .= '<Say voice="Polly.Joanna">We are currently unavailable. Please leave a message after the tone.</Say>';
             $twiml .= '<Record maxLength="120" playBeep="true" action="' . htmlspecialchars($recordingAction) . '" transcribe="true" />';

@@ -145,13 +145,13 @@ class TwilioIntegrationViewConfig extends SugarView {
         $fallbackPhone = htmlspecialchars($fallbackPhone);
         $autoCreateChecked = $autoCreateLead ? 'checked' : '';
         
-        // Generate webhook URLs
-        $siteUrl = $sugar_config['site_url'] ?? '';
-        $voiceWebhook = $siteUrl . '/index.php?module=TwilioIntegration&action=webhook&webhook_action=voice';
-        $voiceStatus = $siteUrl . '/index.php?module=TwilioIntegration&action=webhook&webhook_action=status';
-        $voiceFallback = $siteUrl . '/index.php?module=TwilioIntegration&action=webhook&webhook_action=fallback';
-        $smsWebhook = $siteUrl . '/index.php?module=TwilioIntegration&action=sms_webhook&sms_action=inbound';
-        $smsStatus = $siteUrl . '/index.php?module=TwilioIntegration&action=sms_webhook&sms_action=status';
+        // Generate webhook URLs (use direct webhook file to bypass auth)
+        $siteUrl = rtrim($sugar_config['site_url'] ?? '', '/');
+        $voiceWebhook = $siteUrl . '/legacy/twilio_webhook.php?action=twiml&dial_action=inbound';
+        $voiceStatus = $siteUrl . '/legacy/twilio_webhook.php?action=status';
+        $voiceFallback = $siteUrl . '/legacy/twilio_webhook.php?action=twiml&dial_action=inbound';
+        $smsWebhook = $siteUrl . '/legacy/twilio_webhook.php?action=sms';
+        $smsStatus = $siteUrl . '/legacy/twilio_webhook.php?action=sms';
         
         // Messages
         $savedMessage = '';

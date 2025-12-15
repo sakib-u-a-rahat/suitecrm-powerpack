@@ -491,7 +491,7 @@ class TwilioIntegrationViewSendsms extends SugarView {
             // Use APP_URL env var for public webhook URLs (ngrok/production), fallback to site_url
             $siteUrl = getenv('APP_URL') ?: rtrim($sugar_config['site_url'] ?? '', '/');
             $siteUrl = rtrim($siteUrl, '/');
-            $statusCallback = $siteUrl . '/legacy/index.php?module=TwilioIntegration&action=sms_webhook';
+            $statusCallback = $siteUrl . '/legacy/twilio_webhook.php?action=sms';
             
             $url = "https://api.twilio.com/2010-04-01/Accounts/{$config['account_sid']}/Messages.json";
             

@@ -147,27 +147,27 @@ class TwilioClient {
      * Get TwiML URL for call handling
      */
     private function getTwiMLUrl() {
-        return $this->getBaseUrl() . '/legacy/index.php?module=TwilioIntegration&action=twiml';
+        return $this->getBaseUrl() . '/legacy/twilio_webhook.php?action=twiml&dial_action=outbound';
     }
 
     /**
      * Get webhook URL for call status updates
      */
     private function getWebhookUrl() {
-        return $this->getBaseUrl() . '/legacy/index.php?module=TwilioIntegration&action=webhook';
+        return $this->getBaseUrl() . '/legacy/twilio_webhook.php?action=status';
     }
 
     /**
      * Get webhook URL for SMS status updates
      */
     private function getSMSWebhookUrl() {
-        return $this->getBaseUrl() . '/legacy/index.php?module=TwilioIntegration&action=sms_webhook';
+        return $this->getBaseUrl() . '/legacy/twilio_webhook.php?action=sms';
     }
 
     /**
      * Get webhook URL for recording callbacks
      */
     public function getRecordingWebhookUrl() {
-        return $this->getBaseUrl() . '/legacy/index.php?module=TwilioIntegration&action=recording_webhook';
+        return $this->getBaseUrl() . '/legacy/twilio_webhook.php?action=recording';
     }
 }

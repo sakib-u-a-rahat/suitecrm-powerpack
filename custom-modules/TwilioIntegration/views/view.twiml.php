@@ -72,7 +72,7 @@ class TwilioIntegrationViewTwiml extends SugarView
         
         if (!empty($to)) {
             // Status callback for when the dialed leg completes
-            $statusCallback = $siteUrl . '/legacy/index.php?module=TwilioIntegration&action=twiml&dial_action=dial_status';
+            $statusCallback = $siteUrl . '/legacy/twilio_webhook.php?action=twiml&dial_action=dial_status';
             
             $twiml .= '<Say voice="Polly.Joanna">Connecting your call. Please wait.</Say>';
             $twiml .= '<Dial callerId="' . htmlspecialchars($config['phone_number']) . '" ';
@@ -118,7 +118,7 @@ class TwilioIntegrationViewTwiml extends SugarView
         
         if (!empty($bdmPhone)) {
             // Try to connect to BDM first
-            $voicemailUrl = $siteUrl . '/legacy/index.php?module=TwilioIntegration&action=twiml&dial_action=voicemail&from=' . urlencode($from);
+            $voicemailUrl = $siteUrl . '/legacy/twilio_webhook.php?action=twiml&dial_action=voicemail&from=' . urlencode($from);
             
             $twiml .= '<Say voice="Polly.Joanna">Please hold while I connect you to your representative.</Say>';
             $twiml .= '<Dial timeout="20" action="' . htmlspecialchars($voicemailUrl) . '" method="POST">';
@@ -151,7 +151,7 @@ class TwilioIntegrationViewTwiml extends SugarView
             $twiml .= '<Hangup/>';
         } else {
             // BDM didn't answer - no-answer, busy, failed, etc.
-            $recordingUrl = $siteUrl . '/legacy/index.php?module=TwilioIntegration&action=twiml&dial_action=recording&from=' . urlencode($from);
+            $recordingUrl = $siteUrl . '/legacy/twilio_webhook.php?action=twiml&dial_action=recording&from=' . urlencode($from);
             
             $twiml .= '<Say voice="Polly.Joanna">I\'m sorry, your representative is not available right now. Please leave a message after the tone, and we\'ll get back to you as soon as possible.</Say>';
             $twiml .= '<Record maxLength="120" playBeep="true" action="' . htmlspecialchars($recordingUrl) . '" transcribe="true" />';
@@ -219,7 +219,7 @@ class TwilioIntegrationViewTwiml extends SugarView
     private function outputVoicemailTwiML($from, &$twiml)
     {
         $siteUrl = $this->getBaseUrl();
-        $recordingUrl = $siteUrl . '/legacy/index.php?module=TwilioIntegration&action=twiml&dial_action=recording&from=' . urlencode($from);
+        $recordingUrl = $siteUrl . '/legacy/twilio_webhook.php?action=twiml&dial_action=recording&from=' . urlencode($from);
         
         $twiml .= '<Say voice="Polly.Joanna">We are currently unavailable. Please leave a message after the tone, and we\'ll get back to you as soon as possible.</Say>';
         $twiml .= '<Record maxLength="120" playBeep="true" action="' . htmlspecialchars($recordingUrl) . '" transcribe="true" />';
