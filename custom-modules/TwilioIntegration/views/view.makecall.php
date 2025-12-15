@@ -557,7 +557,7 @@ class TwilioIntegrationViewMakecall extends SugarView {
             $siteUrl = rtrim($siteUrl, '/');
 
             // Use direct webhook URLs for Twilio callbacks (bypasses SuiteCRM auth)
-            $webhookBase = $siteUrl . '/legacy/modules/TwilioIntegration/twilio_webhook.php';
+            $webhookBase = $siteUrl . '/legacy/twilio_webhook.php';
             $twimlUrl = $webhookBase . '?action=twiml&dial_action=outbound&to=' . urlencode($to);
             $statusCallback = $webhookBase . '?action=status';
             $recordingCallback = $webhookBase . '?action=recording';

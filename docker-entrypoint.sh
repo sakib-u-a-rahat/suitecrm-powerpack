@@ -53,7 +53,14 @@ if [ ! -f "/bitnami/suitecrm/public/index.php" ]; then
             fi
         fi
     fi
-    
+
+    # Copy Twilio webhook to legacy root (must be accessible without auth)
+    if [ -f "/opt/bitnami/suitecrm/modules/TwilioIntegration/twilio_webhook.php" ]; then
+        echo "Installing Twilio webhook..."
+        cp /opt/bitnami/suitecrm/modules/TwilioIntegration/twilio_webhook.php /bitnami/suitecrm/public/legacy/twilio_webhook.php
+        chown daemon:daemon /bitnami/suitecrm/public/legacy/twilio_webhook.php
+    fi
+
     # Set ownership and permissions
     echo "Setting ownership and permissions..."
     chown -R daemon:daemon /bitnami/suitecrm
@@ -143,7 +150,14 @@ if [ ! -f "/bitnami/suitecrm/config.php" ] && [ -n "$SUITECRM_DATABASE_HOST" ] &
         
         if /opt/bitnami/scripts/suitecrm/install-modules.sh; then
             echo "✅ Custom modules installed successfully!"
-            
+
+            # Copy Twilio webhook to legacy root immediately after module installation
+            if [ -f "/opt/bitnami/suitecrm/modules/TwilioIntegration/twilio_webhook.php" ]; then
+                cp /opt/bitnami/suitecrm/modules/TwilioIntegration/twilio_webhook.php /bitnami/suitecrm/public/legacy/twilio_webhook.php 2>/dev/null || true
+                chown daemon:daemon /bitnami/suitecrm/public/legacy/twilio_webhook.php 2>/dev/null || true
+                echo "Twilio webhook installed to legacy root"
+            fi
+
             # Enable modules in SuiteCRM 8 interface
             echo "Enabling modules in SuiteCRM 8 interface..."
             /opt/bitnami/scripts/suitecrm/enable-modules-suite8.sh || echo "Module enablement completed with warnings"
@@ -151,7 +165,7 @@ if [ ! -f "/bitnami/suitecrm/config.php" ] && [ -n "$SUITECRM_DATABASE_HOST" ] &
             echo "⚠️  Module installation failed. You can install manually later."
             touch /bitnami/suitecrm/.modules_pending
         fi
-        
+
         # Remove pending flag after attempt
         rm -f /bitnami/suitecrm/.modules_pending
     else
@@ -164,15 +178,22 @@ fi
 if [ -f "/bitnami/suitecrm/config.php" ] && [ -f "/bitnami/suitecrm/.modules_pending" ]; then
     echo "Detected pending module installation..."
     echo "Installing PowerPack modules..."
-    
+
     # Wait a moment for everything to settle
     sleep 3
-    
+
     # Run module installation script
     if /opt/bitnami/scripts/suitecrm/install-modules.sh; then
         rm -f /bitnami/suitecrm/.modules_pending
         echo "✅ Custom modules installed successfully!"
-        
+
+        # Copy Twilio webhook to legacy root
+        if [ -f "/opt/bitnami/suitecrm/modules/TwilioIntegration/twilio_webhook.php" ]; then
+            cp /opt/bitnami/suitecrm/modules/TwilioIntegration/twilio_webhook.php /bitnami/suitecrm/public/legacy/twilio_webhook.php 2>/dev/null || true
+            chown daemon:daemon /bitnami/suitecrm/public/legacy/twilio_webhook.php 2>/dev/null || true
+            echo "Twilio webhook installed to legacy root"
+        fi
+
         # Enable modules in SuiteCRM 8 interface
         echo "Enabling modules in SuiteCRM 8 interface..."
         /opt/bitnami/scripts/suitecrm/enable-modules-suite8.sh || echo "Module enablement completed with warnings"
@@ -203,6 +224,13 @@ if [ -f "/bitnami/suitecrm/config.php" ]; then
     if [ -f "/opt/bitnami/suitecrm/dist/twilio-click-to-call.js" ]; then
         cp /opt/bitnami/suitecrm/dist/twilio-click-to-call.js /bitnami/suitecrm/public/twilio-click-to-call.js 2>/dev/null || true
         chown daemon:daemon /bitnami/suitecrm/public/twilio-click-to-call.js 2>/dev/null || true
+    fi
+
+    # Copy Twilio webhook to legacy root (must be accessible without auth)
+    if [ -f "/opt/bitnami/suitecrm/modules/TwilioIntegration/twilio_webhook.php" ]; then
+        cp /opt/bitnami/suitecrm/modules/TwilioIntegration/twilio_webhook.php /bitnami/suitecrm/public/legacy/twilio_webhook.php 2>/dev/null || true
+        chown daemon:daemon /bitnami/suitecrm/public/legacy/twilio_webhook.php 2>/dev/null || true
+        echo "Twilio webhook copied to legacy root"
     fi
 
     # Re-run install script to update language files, module mappings, etc.

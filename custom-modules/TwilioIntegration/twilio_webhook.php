@@ -3,10 +3,10 @@
  * Twilio Webhook Entry Point
  * Direct entry point for Twilio callbacks - bypasses SuiteCRM authentication
  *
- * Webhook URLs to configure in Twilio:
- *   TwiML:     https://yourdomain.com/legacy/modules/TwilioIntegration/twilio_webhook.php?action=twiml
- *   Recording: https://yourdomain.com/legacy/modules/TwilioIntegration/twilio_webhook.php?action=recording
- *   Status:    https://yourdomain.com/legacy/modules/TwilioIntegration/twilio_webhook.php?action=status
+ * Webhook URLs:
+ *   TwiML:     https://yourdomain.com/legacy/twilio_webhook.php?action=twiml
+ *   Recording: https://yourdomain.com/legacy/twilio_webhook.php?action=recording
+ *   Status:    https://yourdomain.com/legacy/twilio_webhook.php?action=status
  */
 
 // Prevent CLI execution
@@ -15,12 +15,12 @@ if (php_sapi_name() === 'cli') {
 }
 
 // Change to SuiteCRM legacy root
-$legacyRoot = dirname(__FILE__) . '/../../..';
+// File is at /bitnami/suitecrm/public/legacy/twilio_webhook.php
+$legacyRoot = dirname(__FILE__);
 if (!file_exists($legacyRoot . '/config.php')) {
-    // Try alternate path structure
-    $legacyRoot = dirname(__FILE__) . '/../../../public/legacy';
+    // Fallback: try if we're in modules subdirectory
+    $legacyRoot = dirname(__FILE__) . '/../../..';
 }
-
 if (!file_exists($legacyRoot . '/config.php')) {
     header('HTTP/1.1 500 Internal Server Error');
     header('Content-Type: application/xml');
@@ -31,17 +31,8 @@ if (!file_exists($legacyRoot . '/config.php')) {
 chdir($legacyRoot);
 define('sugarEntry', true);
 
-// Load SuiteCRM config
-require_once('config.php');
-$GLOBALS['sugar_config'] = $sugar_config;
-
-// Initialize logging
-require_once('include/SugarLogger/LoggerManager.php');
-$GLOBALS['log'] = LoggerManager::getLogger('SugarCRM');
-
-// Initialize database
-require_once('include/database/DBManagerFactory.php');
-$GLOBALS['db'] = DBManagerFactory::getInstance();
+// Use SuiteCRM's entryPoint for proper bootstrap (loads all required classes)
+require_once('include/entryPoint.php');
 
 // Get action parameter
 $action = isset($_REQUEST['action']) ? $_REQUEST['action'] : 'twiml';
@@ -246,7 +237,7 @@ function getWebhookBaseUrl() {
     global $sugar_config;
     $baseUrl = getenv('APP_URL') ?: ($sugar_config['site_url'] ?? '');
     $baseUrl = rtrim($baseUrl, '/');
-    return $baseUrl . '/legacy/modules/TwilioIntegration/twilio_webhook.php';
+    return $baseUrl . '/legacy/twilio_webhook.php';
 }
 
 function cleanPhone($phone) {
