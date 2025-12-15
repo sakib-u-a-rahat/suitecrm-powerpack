@@ -5,7 +5,7 @@ echo "=========================================="
 echo "SuiteCRM PowerPack - Docker Hub Publishing"
 echo "=========================================="
 echo ""
-echo "Repository: https://github.com/mahir009/suitecrm-powerpack"
+echo "Repository: https://github.com/sakib9029/suitecrm-powerpack"
 echo ""
 
 # Step 1: Docker Hub Login
@@ -20,11 +20,11 @@ read -p "Press Enter when logged in..."
 echo ""
 echo "STEP 2: Build Docker Image Locally"
 echo "-----------------------------------"
-echo "Building image: mahir009/suitecrm-powerpack:latest"
-docker build -t mahir009/suitecrm-powerpack:latest .
-docker tag mahir009/suitecrm-powerpack:latest mahir009/suitecrm-powerpack:v1.0.0
-docker tag mahir009/suitecrm-powerpack:latest mahir009/suitecrm-powerpack:1.0
-docker tag mahir009/suitecrm-powerpack:latest mahir009/suitecrm-powerpack:1
+echo "Building image: sakib9029/suitecrm-powerpack:latest"
+docker build -t sakib9029/suitecrm-powerpack:latest .
+docker tag sakib9029/suitecrm-powerpack:latest sakib9029/suitecrm-powerpack:v1.0.0
+docker tag sakib9029/suitecrm-powerpack:latest sakib9029/suitecrm-powerpack:1.0
+docker tag sakib9029/suitecrm-powerpack:latest sakib9029/suitecrm-powerpack:1
 
 echo ""
 echo "✓ Image built successfully!"
@@ -42,7 +42,7 @@ if [ "$test_choice" = "y" ]; then
         -e SUITECRM_DATABASE_NAME=suitecrm_test \
         -e SUITECRM_DATABASE_USER=test \
         -e SUITECRM_DATABASE_PASSWORD=test \
-        mahir009/suitecrm-powerpack:latest
+        sakib9029/suitecrm-powerpack:latest
     
     echo "Test container started on http://localhost:8080"
     read -p "Press Enter to stop test container..."
@@ -57,10 +57,10 @@ echo "--------------------------"
 echo "Pushing images to Docker Hub..."
 echo ""
 
-docker push mahir009/suitecrm-powerpack:latest
-docker push mahir009/suitecrm-powerpack:v1.0.0
-docker push mahir009/suitecrm-powerpack:1.0
-docker push mahir009/suitecrm-powerpack:1
+docker push sakib9029/suitecrm-powerpack:latest
+docker push sakib9029/suitecrm-powerpack:v1.0.0
+docker push sakib9029/suitecrm-powerpack:1.0
+docker push sakib9029/suitecrm-powerpack:1
 
 echo ""
 echo "=========================================="
@@ -68,17 +68,17 @@ echo "✅ SUCCESS! Images Published to Docker Hub"
 echo "=========================================="
 echo ""
 echo "Available tags:"
-echo "  • mahir009/suitecrm-powerpack:latest"
-echo "  • mahir009/suitecrm-powerpack:v1.0.0"
-echo "  • mahir009/suitecrm-powerpack:1.0"
-echo "  • mahir009/suitecrm-powerpack:1"
+echo "  • sakib9029/suitecrm-powerpack:latest"
+echo "  • sakib9029/suitecrm-powerpack:v1.0.0"
+echo "  • sakib9029/suitecrm-powerpack:1.0"
+echo "  • sakib9029/suitecrm-powerpack:1"
 echo ""
 echo "View on Docker Hub:"
-echo "  https://hub.docker.com/r/mahir009/suitecrm-powerpack"
+echo "  https://hub.docker.com/r/sakib9029/suitecrm-powerpack"
 echo ""
 echo "Pull with:"
-echo "  docker pull mahir009/suitecrm-powerpack:latest"
+echo "  docker pull sakib9029/suitecrm-powerpack:latest"
 echo ""
 echo "GitHub Repository:"
-echo "  https://github.com/mahir009/suitecrm-powerpack"
+echo "  https://github.com/sakib-u-ahmed-r/suitecrm-powerpack"
 echo ""

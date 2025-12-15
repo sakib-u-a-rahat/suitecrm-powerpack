@@ -18,24 +18,24 @@ echo "✓ Logged into Docker Hub"
 echo ""
 
 # Push all tags
-echo "Pushing mahir009/suitecrm-powerpack:latest..."
-docker push mahir009/suitecrm-powerpack:latest
+echo "Pushing sakib9029/suitecrm-powerpack:latest..."
+docker push sakib9029/suitecrm-powerpack:latest
 
-echo "Pushing mahir009/suitecrm-powerpack:v1.0.0..."
-docker push mahir009/suitecrm-powerpack:v1.0.0
+echo "Pushing sakib9029/suitecrm-powerpack:v1.0.0..."
+docker push sakib9029/suitecrm-powerpack:v1.0.0
 
-echo "Pushing mahir009/suitecrm-powerpack:1.0..."
-docker push mahir009/suitecrm-powerpack:1.0
+echo "Pushing sakib9029/suitecrm-powerpack:1.0..."
+docker push sakib9029/suitecrm-powerpack:1.0
 
-echo "Pushing mahir009/suitecrm-powerpack:1..."
-docker push mahir009/suitecrm-powerpack:1
+echo "Pushing sakib9029/suitecrm-powerpack:1..."
+docker push sakib9029/suitecrm-powerpack:1
 
 echo ""
 echo "✅ All images pushed successfully!"
 echo ""
 echo "View on Docker Hub:"
-echo "  https://hub.docker.com/r/mahir009/suitecrm-powerpack"
+echo "  https://hub.docker.com/r/sakib9029/suitecrm-powerpack"
 echo ""
 echo "Pull with:"
-echo "  docker pull mahir009/suitecrm-powerpack:latest"
+echo "  docker pull sakib9029/suitecrm-powerpack:latest"
 echo ""
