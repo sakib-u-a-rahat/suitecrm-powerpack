@@ -45,6 +45,14 @@ switch ($action) {
     case 'twiml':
         handleTwiml($dialAction);
         break;
+    case 'voice':
+        // Handle Twilio Client SDK outbound calls (TwiML App Voice URL)
+        handleBrowserCall();
+        break;
+    case 'token':
+        // Generate access token for Twilio Client SDK
+        handleGetToken();
+        break;
     case 'recording':
         handleRecording();
         break;
@@ -67,10 +75,12 @@ exit;
 function handleTwiml($dialAction) {
     header('Content-Type: application/xml');
 
-    $to = $_REQUEST['To'] ?? $_REQUEST['to'] ?? '';
-    $from = $_REQUEST['From'] ?? $_REQUEST['from'] ?? '';
+    // IMPORTANT: Use $_GET for our URL params, $_POST for Twilio's params
+    // Our URL has ?to=RECIPIENT, Twilio POSTs To=AGENT_PHONE
+    $to = isset($_GET['to']) ? $_GET['to'] : (isset($_POST['To']) ? $_POST['To'] : '');
+    $from = isset($_GET['from']) ? $_GET['from'] : (isset($_POST['From']) ? $_POST['From'] : '');
 
-    $GLOBALS['log']->info("TwiML - DialAction: $dialAction, To: $to, From: $from");
+    $GLOBALS['log']->info("TwiML - DialAction: $dialAction, To: $to, From: $from, GET_to: " . ($_GET['to'] ?? 'none') . ", POST_To: " . ($_POST['To'] ?? 'none'));
 
     // Get Twilio config
     $config = getTwilioConfig();
@@ -144,6 +154,133 @@ function handleSms() {
     echo '<?xml version="1.0" encoding="UTF-8"?><Response></Response>';
 }
 
+/**
+ * Generate access token for Twilio Client SDK
+ */
+function handleGetToken() {
+    header('Content-Type: application/json');
+    header('Cache-Control: no-cache');
+
+    $config = getTwilioConfig();
+
+    if (empty($config['account_sid']) || empty($config['auth_token'])) {
+        echo json_encode(['success' => false, 'error' => 'Twilio is not configured']);
+        return;
+    }
+
+    // Get TwiML App SID and API credentials
+    global $sugar_config;
+    $twimlAppSid = getenv('TWILIO_TWIML_APP_SID') ?: ($sugar_config['twilio_twiml_app_sid'] ?? '');
+    $apiKey = getenv('TWILIO_API_KEY') ?: ($sugar_config['twilio_api_key'] ?? '');
+    $apiSecret = getenv('TWILIO_API_SECRET') ?: ($sugar_config['twilio_api_secret'] ?? '');
+
+    // Fall back to account credentials if no API key
+    if (empty($apiKey)) {
+        $apiKey = $config['account_sid'];
+        $apiSecret = $config['auth_token'];
+    }
+
+    if (empty($twimlAppSid)) {
+        echo json_encode(['success' => false, 'error' => 'TwiML App SID not configured. Go to Twilio Config to set it up.']);
+        return;
+    }
+
+    // Generate identity from session or default
+    $identity = 'agent_' . (isset($_SESSION['authenticated_user_id']) ? $_SESSION['authenticated_user_id'] : 'web');
+
+    // Generate JWT token
+    $token = generateTwilioToken($config['account_sid'], $apiKey, $apiSecret, $identity, $twimlAppSid);
+
+    echo json_encode([
+        'success' => true,
+        'token' => $token,
+        'identity' => $identity,
+        'caller_id' => $config['phone_number']
+    ]);
+}
+
+/**
+ * Generate JWT Access Token for Twilio Client
+ */
+function generateTwilioToken($accountSid, $apiKey, $apiSecret, $identity, $twimlAppSid) {
+    $ttl = 3600;
+    $now = time();
+
+    $header = [
+        'typ' => 'JWT',
+        'alg' => 'HS256',
+        'cty' => 'twilio-fpa;v=1'
+    ];
+
+    $grants = [
+        'identity' => $identity,
+        'voice' => [
+            'outgoing' => [
+                'application_sid' => $twimlAppSid
+            ]
+        ]
+    ];
+
+    $payload = [
+        'jti' => $apiKey . '-' . $now,
+        'iss' => $apiKey,
+        'sub' => $accountSid,
+        'exp' => $now + $ttl,
+        'grants' => $grants
+    ];
+
+    $headerEncoded = base64UrlEncode(json_encode($header));
+    $payloadEncoded = base64UrlEncode(json_encode($payload));
+    $signature = hash_hmac('sha256', "$headerEncoded.$payloadEncoded", $apiSecret, true);
+    $signatureEncoded = base64UrlEncode($signature);
+
+    return "$headerEncoded.$payloadEncoded.$signatureEncoded";
+}
+
+function base64UrlEncode($data) {
+    return rtrim(strtr(base64_encode($data), '+/', '-_'), '=');
+}
+
+/**
+ * Handle browser-originated calls from Twilio Client SDK
+ * This is called when a call is made via device.connect() in the browser
+ */
+function handleBrowserCall() {
+    header('Content-Type: application/xml');
+
+    // Get parameters passed from Twilio Client SDK
+    $to = $_REQUEST['To'] ?? '';
+    $callerId = $_REQUEST['CallerId'] ?? $_REQUEST['From'] ?? '';
+    $from = $_REQUEST['From'] ?? ''; // This is the client identity
+
+    $GLOBALS['log']->info("Browser Call - To: $to, CallerId: $callerId, From: $from");
+
+    // Clean and format the destination number
+    $to = cleanPhone($to);
+
+    // Get Twilio config for caller ID
+    $config = getTwilioConfig();
+    if (empty($callerId)) {
+        $callerId = $config['phone_number'] ?? '';
+    }
+
+    echo '<?xml version="1.0" encoding="UTF-8"?>';
+    echo '<Response>';
+
+    if (!empty($to)) {
+        // Dial the destination number
+        // The browser (Twilio Client) is already connected, this connects to the recipient
+        echo '<Dial callerId="' . h($callerId) . '" timeout="30">';
+        echo '<Number>' . h($to) . '</Number>';
+        echo '</Dial>';
+    } else {
+        echo '<Say voice="Polly.Joanna">No destination number provided.</Say>';
+        echo '<Hangup/>';
+    }
+
+    echo '</Response>';
+}
+
 // ============================================================================
 // TwiML Output Functions
 // ============================================================================
@@ -156,7 +293,8 @@ function outputOutbound($to, $config, $baseUrl) {
     echo '<?xml version="1.0" encoding="UTF-8"?>';
     echo '<Response>';
     if ($to) {
-        echo '<Say voice="Polly.Joanna">Connecting your call. Please wait.</Say>';
+        // Agent hears this message, then gets connected to the recipient
+        echo '<Say voice="Polly.Joanna">Connecting you to ' . h(formatPhoneForSpeech($to)) . '. Please hold.</Say>';
         echo '<Dial callerId="' . h($callerId) . '" timeout="30" action="' . h($statusUrl) . '" method="POST">';
         echo '<Number>' . h($to) . '</Number>';
         echo '</Dial>';
@@ -246,6 +384,26 @@ function cleanPhone($phone) {
         $digits = '1' . $digits;
     }
     return '+' . $digits;
+}
+
+function formatPhoneForSpeech($phone) {
+    // Make phone number more readable for TTS
+    // +16315551234 -> "6 3 1. 5 5 5. 1 2 3 4"
+    $digits = preg_replace('/[^0-9]/', '', $phone);
+    // Skip country code for US numbers
+    if (strlen($digits) === 11 && $digits[0] === '1') {
+        $digits = substr($digits, 1);
+    }
+    // Add spaces between digits and pauses between groups
+    if (strlen($digits) === 10) {
+        $area = substr($digits, 0, 3);
+        $prefix = substr($digits, 3, 3);
+        $line = substr($digits, 6, 4);
+        return implode(' ', str_split($area)) . '. ' .
+               implode(' ', str_split($prefix)) . '. ' .
+               implode(' ', str_split($line));
+    }
+    return implode(' ', str_split($digits));
 }
 
 function h($str) {

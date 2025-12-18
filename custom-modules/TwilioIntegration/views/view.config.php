@@ -35,13 +35,16 @@ class TwilioIntegrationViewConfig extends SugarView {
     
     private function saveConfig() {
         global $sugar_config;
-        
+
         $accountSid = isset($_POST["twilio_account_sid"]) ? trim($_POST["twilio_account_sid"]) : "";
         $authToken = isset($_POST["twilio_auth_token"]) ? trim($_POST["twilio_auth_token"]) : "";
         $phoneNumber = isset($_POST["twilio_phone_number"]) ? trim($_POST["twilio_phone_number"]) : "";
         $fallbackPhone = isset($_POST["twilio_fallback_phone"]) ? trim($_POST["twilio_fallback_phone"]) : "";
+        $twimlAppSid = isset($_POST["twilio_twiml_app_sid"]) ? trim($_POST["twilio_twiml_app_sid"]) : "";
+        $apiKey = isset($_POST["twilio_api_key"]) ? trim($_POST["twilio_api_key"]) : "";
+        $apiSecret = isset($_POST["twilio_api_secret"]) ? trim($_POST["twilio_api_secret"]) : "";
         $autoCreateLead = isset($_POST["twilio_auto_create_lead"]) ? 1 : 0;
-        
+
         // Read existing config_override
         $override_file = "config_override.php";
         $existing_config = "";
@@ -51,7 +54,7 @@ class TwilioIntegrationViewConfig extends SugarView {
             $existing_config = preg_replace("/<\?php\s*/", "", $existing_config);
             $existing_config = preg_replace("/\\$sugar_config\[.twilio_[^'\"]+.\]\s*=\s*[^;]+;\s*/", "", $existing_config);
         }
-        
+
         // Build new config
         $config_content = "<?php\n\n";
         $config_content .= "// Twilio Configuration\n";
@@ -59,22 +62,28 @@ class TwilioIntegrationViewConfig extends SugarView {
         $config_content .= "\$sugar_config['twilio_auth_token'] = '" . addslashes($authToken) . "';\n";
         $config_content .= "\$sugar_config['twilio_phone_number'] = '" . addslashes($phoneNumber) . "';\n";
         $config_content .= "\$sugar_config['twilio_fallback_phone'] = '" . addslashes($fallbackPhone) . "';\n";
+        $config_content .= "\$sugar_config['twilio_twiml_app_sid'] = '" . addslashes($twimlAppSid) . "';\n";
+        $config_content .= "\$sugar_config['twilio_api_key'] = '" . addslashes($apiKey) . "';\n";
+        $config_content .= "\$sugar_config['twilio_api_secret'] = '" . addslashes($apiSecret) . "';\n";
         $config_content .= "\$sugar_config['twilio_auto_create_lead'] = " . $autoCreateLead . ";\n\n";
-        
+
         // Append existing non-Twilio config
         if (!empty(trim($existing_config))) {
             $config_content .= $existing_config;
         }
-        
+
         file_put_contents($override_file, $config_content);
-        
+
         // Update runtime config
         $sugar_config['twilio_account_sid'] = $accountSid;
         $sugar_config['twilio_auth_token'] = $authToken;
         $sugar_config['twilio_phone_number'] = $phoneNumber;
         $sugar_config['twilio_fallback_phone'] = $fallbackPhone;
+        $sugar_config['twilio_twiml_app_sid'] = $twimlAppSid;
+        $sugar_config['twilio_api_key'] = $apiKey;
+        $sugar_config['twilio_api_secret'] = $apiSecret;
         $sugar_config['twilio_auto_create_lead'] = $autoCreateLead;
-        
+
         $this->configSaved = true;
     }
     
@@ -136,15 +145,21 @@ class TwilioIntegrationViewConfig extends SugarView {
         $authToken = $sugar_config['twilio_auth_token'] ?? getenv('TWILIO_AUTH_TOKEN') ?: '';
         $phoneNumber = $sugar_config['twilio_phone_number'] ?? getenv('TWILIO_PHONE_NUMBER') ?: '';
         $fallbackPhone = $sugar_config['twilio_fallback_phone'] ?? '';
+        $twimlAppSid = $sugar_config['twilio_twiml_app_sid'] ?? getenv('TWILIO_TWIML_APP_SID') ?: '';
+        $apiKey = $sugar_config['twilio_api_key'] ?? getenv('TWILIO_API_KEY') ?: '';
+        $apiSecret = $sugar_config['twilio_api_secret'] ?? getenv('TWILIO_API_SECRET') ?: '';
         $autoCreateLead = $sugar_config['twilio_auto_create_lead'] ?? 0;
-        
+
         // Escape for HTML
         $accountSid = htmlspecialchars($accountSid);
         $authToken = htmlspecialchars($authToken);
         $phoneNumber = htmlspecialchars($phoneNumber);
         $fallbackPhone = htmlspecialchars($fallbackPhone);
+        $twimlAppSid = htmlspecialchars($twimlAppSid);
+        $apiKey = htmlspecialchars($apiKey);
+        $apiSecret = htmlspecialchars($apiSecret);
         $autoCreateChecked = $autoCreateLead ? 'checked' : '';
-        
+
         // Generate webhook URLs (use direct webhook file to bypass auth)
         $siteUrl = rtrim($sugar_config['site_url'] ?? '', '/');
         $voiceWebhook = $siteUrl . '/legacy/twilio_webhook.php?action=twiml&dial_action=inbound';
@@ -152,6 +167,7 @@ class TwilioIntegrationViewConfig extends SugarView {
         $voiceFallback = $siteUrl . '/legacy/twilio_webhook.php?action=twiml&dial_action=inbound';
         $smsWebhook = $siteUrl . '/legacy/twilio_webhook.php?action=sms';
         $smsStatus = $siteUrl . '/legacy/twilio_webhook.php?action=sms';
+        $twimlAppVoiceUrl = $siteUrl . '/legacy/twilio_webhook.php?action=voice';
         
         // Messages
         $savedMessage = '';
@@ -273,7 +289,41 @@ class TwilioIntegrationViewConfig extends SugarView {
                         </div>
                     </div>
                 </div>
-                
+
+                <h3>Browser Calling (Twilio Client SDK)</h3>
+                <p style="color: #8b8b8b; margin-bottom: 15px; font-size: 13px;">
+                    Required for click-to-call from browser. Create a TwiML App in Twilio Console → Develop → Voice → TwiML Apps.
+                </p>
+
+                <div class="row">
+                    <div class="col">
+                        <div class="form-group">
+                            <label>TwiML App SID</label>
+                            <input type="text" name="twilio_twiml_app_sid" value="{$twimlAppSid}" placeholder="APxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx">
+                            <div class="help-text">Create in Twilio Console → Voice → TwiML Apps</div>
+                        </div>
+                    </div>
+                    <div class="col">
+                        <div class="form-group">
+                            <label>API Key SID</label>
+                            <input type="text" name="twilio_api_key" value="{$apiKey}" placeholder="SKxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx">
+                            <div class="help-text">Create in Twilio Console → Account → API Keys</div>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="form-group">
+                    <label>API Secret</label>
+                    <input type="password" name="twilio_api_secret" value="{$apiSecret}" placeholder="Your API secret">
+                    <div class="help-text">Shown only once when creating API Key - save it securely</div>
+                </div>
+
+                <div class="webhook-box" style="margin-bottom: 20px;">
+                    <div class="webhook-label">TwiML App Voice URL (copy this to your TwiML App)</div>
+                    <code class="webhook-url" id="twiml-app-url">{$twimlAppVoiceUrl}</code>
+                    <button type="button" class="copy-btn" onclick="copyToClipboard('twiml-app-url')">📋 Copy</button>
+                </div>
+
                 <h3>Automation Settings</h3>
                 
                 <div class="form-group checkbox-group">
