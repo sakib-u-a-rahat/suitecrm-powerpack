@@ -1,0 +1,143 @@
+# Docker Compose for Production Deployment
+# Use this template when connecting to external/managed databases (DigitalOcean, AWS RDS, etc.)
+#
+# IMPORTANT: External databases often require network_mode: host for proper connectivity
+# because Docker bridge networks may not be able to reach external IPs on non-standard ports.
+
+version: '3.8'
+
+services:
+  suitecrm:
+    image: mahir009/suitecrm-powerpack:latest
+    container_name: suitecrm
+    restart: always
+
+    # CRITICAL: Use host network for external database connectivity
+    # Docker bridge networks cannot reliably reach managed databases (DigitalOcean, AWS RDS)
+    # on non-standard ports (like 25060). Host network mode allows direct access.
+    network_mode: host
+
+    # When using network_mode: host, ports are bound directly to host
+    # SuiteCRM runs on 8080, WebSocket server on 3001
+    # No need for ports mapping - they're already accessible on host
+
+    env_file:
+      - ./suitecrm/.env
+
+    volumes:
+      # Persistent SuiteCRM data
+      - suitecrm-data:/bitnami/suitecrm
+
+      # SSL certificate for managed MySQL (if required)
+      # Mount your CA certificate here
+      - ./db/mysql/ca-certs:/opt/bitnami/mysql/certs:ro
+
+  # Nginx reverse proxy (optional - if not using external load balancer)
+  # Note: nginx runs in bridge network and proxies to suitecrm on host
+  nginx:
+    image: nginx:alpine
+    container_name: nginx-proxy
+    restart: always
+    ports:
+      - "80:80"
+      - "443:443"
+    volumes:
+      - ./nginx/conf.d:/etc/nginx/conf.d:ro
+      - ./nginx/certs:/etc/nginx/certs:ro
+    extra_hosts:
+      # Required for nginx to reach suitecrm on host network
+      - "host.docker.internal:host-gateway"
+    networks:
+      - web
+
+volumes:
+  suitecrm-data:
+
+networks:
+  web:
+    driver: bridge
+
+# =============================================================================
+# SAMPLE .env FILE (save as ./suitecrm/.env)
+# =============================================================================
+# # Database Configuration
+# SUITECRM_DATABASE_HOST=your-db-host.example.com
+# SUITECRM_DATABASE_PORT_NUMBER=25060
+# SUITECRM_DATABASE_NAME=suitecrm
+# SUITECRM_DATABASE_USER=suitecrm
+# SUITECRM_DATABASE_PASSWORD=your-password
+#
+# # SSL for managed databases (DigitalOcean, AWS RDS, etc.)
+# MYSQL_SSL_CA=/opt/bitnami/mysql/certs/ca-certificate.crt
+# MYSQL_CLIENT_ENABLE_SSL=yes
+#
+# # SuiteCRM Configuration
+# SUITECRM_SITE_URL=https://your-domain.com
+# SUITECRM_USERNAME=admin
+# SUITECRM_PASSWORD=your-admin-password
+# SUITECRM_EMAIL=admin@example.com
+#
+# # Twilio Integration (optional)
+# TWILIO_ACCOUNT_SID=
+# TWILIO_AUTH_TOKEN=
+# TWILIO_PHONE_NUMBER=
+# TWILIO_FALLBACK_PHONE=
+#
+# # Verbacall Integration (optional)
+# VERBACALL_API_URL=https://demo-ai.verbacall.com
+# VERBACALL_APP_URL=https://app.verbacall.com
+#
+# # WebSocket Notifications
+# NOTIFICATION_JWT_SECRET=your-secure-random-string
+# NOTIFICATION_WS_URL=wss://your-domain.com:3001
+
+# =============================================================================
+# SAMPLE NGINX CONFIG (save as ./nginx/conf.d/suitecrm.conf)
+# =============================================================================
+# server {
+#     listen 80;
+#     server_name your-domain.com;
+#     return 301 https://$server_name$request_uri;
+# }
+#
+# server {
+#     listen 443 ssl;
+#     server_name your-domain.com;
+#
+#     ssl_certificate /etc/nginx/certs/your-domain.com.crt;
+#     ssl_certificate_key /etc/nginx/certs/your-domain.com.key;
+#     ssl_protocols TLSv1.2 TLSv1.3;
+#     ssl_ciphers HIGH:!aNULL:!MD5;
+#
+#     location / {
+#         # Use host.docker.internal since suitecrm runs on host network
+#         proxy_pass http://host.docker.internal:8080;
+#         proxy_set_header Host $host;
+#         proxy_set_header X-Real-IP $remote_addr;
+#         proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+#         proxy_set_header X-Forwarded-Proto $scheme;
+#     }
+# }
+#
+# # WebSocket server on port 3001
+# server {
+#     listen 3001 ssl;
+#     server_name your-domain.com;
+#
+#     ssl_certificate /etc/nginx/certs/your-domain.com.crt;
+#     ssl_certificate_key /etc/nginx/certs/your-domain.com.key;
+#     ssl_protocols TLSv1.2 TLSv1.3;
+#     ssl_ciphers HIGH:!aNULL:!MD5;
+#
+#     location / {
+#         proxy_pass http://host.docker.internal:3001;
+#         proxy_http_version 1.1;
+#         proxy_set_header Upgrade $http_upgrade;
+#         proxy_set_header Connection "upgrade";
+#         proxy_set_header Host $host;
+#         proxy_set_header X-Real-IP $remote_addr;
+#         proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+#         proxy_set_header X-Forwarded-Proto $scheme;
+#         proxy_read_timeout 86400;
+#     }
+# }

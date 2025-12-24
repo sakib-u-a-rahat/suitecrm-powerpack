@@ -39,6 +39,9 @@ COPY --chown=daemon:daemon config/custom-extensions/dist/twilio-click-to-call.js
 COPY --chown=daemon:daemon config/custom-extensions/dist/notification-ws.js /opt/bitnami/suitecrm/dist/notification-ws.js
 COPY --chown=daemon:daemon config/custom-extensions/dist/verbacall-integration.js /opt/bitnami/suitecrm/dist/verbacall-integration.js
 
+# Ensure JS files have proper permissions for web serving
+RUN chmod 644 /opt/bitnami/suitecrm/dist/*.js
+
 # Copy installation scripts
 COPY install-scripts/install-modules.sh /opt/bitnami/scripts/suitecrm/install-modules.sh
 COPY install-scripts/silent-install.sh /opt/bitnami/scripts/suitecrm/silent-install.sh

@@ -42,8 +42,10 @@ if [ ! -f "/bitnami/suitecrm/public/index.php" ]; then
     echo "Copying custom extensions..."
     if [ -f "/opt/bitnami/suitecrm/dist/twilio-click-to-call.js" ]; then
         echo "Installing Twilio click-to-call script for Angular UI..."
-        # Copy to public root (not dist/) since index.html uses relative path from root
-        cp /opt/bitnami/suitecrm/dist/twilio-click-to-call.js /bitnami/suitecrm/public/twilio-click-to-call.js
+        # Copy to dist/ directory where index.html lives
+        cp /opt/bitnami/suitecrm/dist/twilio-click-to-call.js /bitnami/suitecrm/public/dist/twilio-click-to-call.js
+        chmod 644 /bitnami/suitecrm/public/dist/twilio-click-to-call.js
+        chown daemon:daemon /bitnami/suitecrm/public/dist/twilio-click-to-call.js
 
         # Inject script tag into index.html if not already present
         if [ -f "/bitnami/suitecrm/public/dist/index.html" ]; then
@@ -71,8 +73,9 @@ if [ ! -f "/bitnami/suitecrm/public/index.php" ]; then
     # Copy notification WebSocket client JS
     if [ -f "/opt/bitnami/suitecrm/dist/notification-ws.js" ]; then
         echo "Installing Notification WebSocket client..."
-        cp /opt/bitnami/suitecrm/dist/notification-ws.js /bitnami/suitecrm/public/notification-ws.js
-        chown daemon:daemon /bitnami/suitecrm/public/notification-ws.js
+        cp /opt/bitnami/suitecrm/dist/notification-ws.js /bitnami/suitecrm/public/dist/notification-ws.js
+        chmod 644 /bitnami/suitecrm/public/dist/notification-ws.js
+        chown daemon:daemon /bitnami/suitecrm/public/dist/notification-ws.js
 
         # Inject script tag into index.html if not already present
         if [ -f "/bitnami/suitecrm/public/dist/index.html" ]; then
@@ -86,8 +89,9 @@ if [ ! -f "/bitnami/suitecrm/public/index.php" ]; then
     # Copy Verbacall integration JS
     if [ -f "/opt/bitnami/suitecrm/dist/verbacall-integration.js" ]; then
         echo "Installing Verbacall integration script..."
-        cp /opt/bitnami/suitecrm/dist/verbacall-integration.js /bitnami/suitecrm/public/verbacall-integration.js
-        chown daemon:daemon /bitnami/suitecrm/public/verbacall-integration.js
+        cp /opt/bitnami/suitecrm/dist/verbacall-integration.js /bitnami/suitecrm/public/dist/verbacall-integration.js
+        chmod 644 /bitnami/suitecrm/public/dist/verbacall-integration.js
+        chown daemon:daemon /bitnami/suitecrm/public/dist/verbacall-integration.js
 
         # Inject script tag into index.html if not already present
         if [ -f "/bitnami/suitecrm/public/dist/index.html" ]; then
@@ -261,10 +265,18 @@ if [ -f "/bitnami/suitecrm/config.php" ] || [ -f "/bitnami/suitecrm/public/legac
         cp -r /opt/bitnami/suitecrm/custom/Extension/* /bitnami/suitecrm/public/legacy/custom/Extension/ 2>/dev/null || true
     fi
 
-    # Sync Twilio click-to-call JS to public root
+    # Sync Twilio click-to-call JS to dist/ directory and inject into index.html
     if [ -f "/opt/bitnami/suitecrm/dist/twilio-click-to-call.js" ]; then
-        cp /opt/bitnami/suitecrm/dist/twilio-click-to-call.js /bitnami/suitecrm/public/twilio-click-to-call.js 2>/dev/null || true
-        chown daemon:daemon /bitnami/suitecrm/public/twilio-click-to-call.js 2>/dev/null || true
+        cp /opt/bitnami/suitecrm/dist/twilio-click-to-call.js /bitnami/suitecrm/public/dist/twilio-click-to-call.js 2>/dev/null || true
+        chmod 644 /bitnami/suitecrm/public/dist/twilio-click-to-call.js 2>/dev/null || true
+        chown daemon:daemon /bitnami/suitecrm/public/dist/twilio-click-to-call.js 2>/dev/null || true
+        # Inject script tag into index.html if not already present
+        if [ -f "/bitnami/suitecrm/public/dist/index.html" ]; then
+            if ! grep -q "twilio-click-to-call.js" /bitnami/suitecrm/public/dist/index.html; then
+                sed -i 's|</body>|<script src="twilio-click-to-call.js"></script>\n</body>|' /bitnami/suitecrm/public/dist/index.html
+                echo "Twilio click-to-call script injected into Angular UI"
+            fi
+        fi
     fi
 
     # Copy Twilio webhook to legacy root (must be accessible without auth)
@@ -281,16 +293,32 @@ if [ -f "/bitnami/suitecrm/config.php" ] || [ -f "/bitnami/suitecrm/public/legac
         echo "Notification webhook copied to legacy root"
     fi
 
-    # Sync notification WebSocket client JS
+    # Sync notification WebSocket client JS and inject into index.html
     if [ -f "/opt/bitnami/suitecrm/dist/notification-ws.js" ]; then
-        cp /opt/bitnami/suitecrm/dist/notification-ws.js /bitnami/suitecrm/public/notification-ws.js 2>/dev/null || true
-        chown daemon:daemon /bitnami/suitecrm/public/notification-ws.js 2>/dev/null || true
+        cp /opt/bitnami/suitecrm/dist/notification-ws.js /bitnami/suitecrm/public/dist/notification-ws.js 2>/dev/null || true
+        chmod 644 /bitnami/suitecrm/public/dist/notification-ws.js 2>/dev/null || true
+        chown daemon:daemon /bitnami/suitecrm/public/dist/notification-ws.js 2>/dev/null || true
+        # Inject script tag into index.html if not already present
+        if [ -f "/bitnami/suitecrm/public/dist/index.html" ]; then
+            if ! grep -q "notification-ws.js" /bitnami/suitecrm/public/dist/index.html; then
+                sed -i 's|</body>|<script src="notification-ws.js"></script>\n</body>|' /bitnami/suitecrm/public/dist/index.html
+                echo "Notification WebSocket script injected into Angular UI"
+            fi
+        fi
     fi
 
-    # Sync Verbacall integration JS to public root
+    # Sync Verbacall integration JS and inject into index.html
     if [ -f "/opt/bitnami/suitecrm/dist/verbacall-integration.js" ]; then
-        cp /opt/bitnami/suitecrm/dist/verbacall-integration.js /bitnami/suitecrm/public/verbacall-integration.js 2>/dev/null || true
-        chown daemon:daemon /bitnami/suitecrm/public/verbacall-integration.js 2>/dev/null || true
+        cp /opt/bitnami/suitecrm/dist/verbacall-integration.js /bitnami/suitecrm/public/dist/verbacall-integration.js 2>/dev/null || true
+        chmod 644 /bitnami/suitecrm/public/dist/verbacall-integration.js 2>/dev/null || true
+        chown daemon:daemon /bitnami/suitecrm/public/dist/verbacall-integration.js 2>/dev/null || true
+        # Inject script tag into index.html if not already present
+        if [ -f "/bitnami/suitecrm/public/dist/index.html" ]; then
+            if ! grep -q "verbacall-integration.js" /bitnami/suitecrm/public/dist/index.html; then
+                sed -i 's|</body>|<script src="verbacall-integration.js"></script>\n</body>|' /bitnami/suitecrm/public/dist/index.html
+                echo "Verbacall integration script injected into Angular UI"
+            fi
+        fi
     fi
 
     # Re-run install script to update language files, module mappings, etc.

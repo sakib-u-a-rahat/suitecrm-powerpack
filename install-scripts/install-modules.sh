@@ -12,13 +12,24 @@ if [ ! -f "/bitnami/suitecrm/public/legacy/config.php" ]; then
     exit 1
 fi
 
-# Verify modules exist
+# Verify modules exist (check both image source and runtime locations)
 for MODULE in TwilioIntegration LeadJourney FunnelDashboard SalesTargets Packages Webhooks NotificationHub VerbacallIntegration; do
-    if [ ! -f "/bitnami/suitecrm/modules/$MODULE/$MODULE.php" ]; then
-        echo "ERROR: Module $MODULE not found at /bitnami/suitecrm/modules/$MODULE/"
+    # Check image source location first (where modules are stored in Docker image)
+    if [ -f "/opt/bitnami/suitecrm/modules/$MODULE/$MODULE.php" ]; then
+        echo "Found module: $MODULE (from image)"
+    # Fallback to runtime location (after first-run copy)
+    elif [ -f "/bitnami/suitecrm/modules/$MODULE/$MODULE.php" ]; then
+        echo "Found module: $MODULE (from volume)"
+    # Also check if already installed in legacy
+    elif [ -f "/bitnami/suitecrm/public/legacy/modules/$MODULE/$MODULE.php" ]; then
+        echo "Found module: $MODULE (already installed)"
+    else
+        echo "ERROR: Module $MODULE not found"
+        echo "  Checked: /opt/bitnami/suitecrm/modules/$MODULE/"
+        echo "  Checked: /bitnami/suitecrm/modules/$MODULE/"
+        echo "  Checked: /bitnami/suitecrm/public/legacy/modules/$MODULE/"
         exit 1
     fi
-    echo "Found module: $MODULE"
 done
 
 # Change to SuiteCRM directory
@@ -34,37 +45,57 @@ mkdir -p /bitnami/suitecrm/public/legacy/custom/modules
 # Copy module files to legacy directory
 echo "Copying module files to legacy directory..."
 for MODULE in TwilioIntegration LeadJourney FunnelDashboard SalesTargets Packages Webhooks NotificationHub VerbacallIntegration; do
-    if [ -d "/bitnami/suitecrm/modules/$MODULE" ]; then
-        echo "  Copying $MODULE..."
+    # Prefer image source location (for upgrades), fallback to volume location
+    if [ -d "/opt/bitnami/suitecrm/modules/$MODULE" ]; then
+        echo "  Copying $MODULE from image..."
+        rm -rf "/bitnami/suitecrm/public/legacy/modules/$MODULE" 2>/dev/null || true
+        cp -r "/opt/bitnami/suitecrm/modules/$MODULE" "/bitnami/suitecrm/public/legacy/modules/"
+        chown -R daemon:daemon "/bitnami/suitecrm/public/legacy/modules/$MODULE"
+    elif [ -d "/bitnami/suitecrm/modules/$MODULE" ]; then
+        echo "  Copying $MODULE from volume..."
+        rm -rf "/bitnami/suitecrm/public/legacy/modules/$MODULE" 2>/dev/null || true
         cp -r "/bitnami/suitecrm/modules/$MODULE" "/bitnami/suitecrm/public/legacy/modules/"
         chown -R daemon:daemon "/bitnami/suitecrm/public/legacy/modules/$MODULE"
     fi
 done
 
-# Copy extension files for modules
+# Copy extension files for modules (prefer image source for upgrades)
 echo "Installing module extensions..."
 mkdir -p /bitnami/suitecrm/public/legacy/custom/Extension/application/Ext/Language
 
-if [ -d "/bitnami/suitecrm/modules/LeadJourney/Extensions" ]; then
+# LeadJourney extensions
+if [ -d "/opt/bitnami/suitecrm/modules/LeadJourney/Extensions" ]; then
+    cp -r /opt/bitnami/suitecrm/modules/LeadJourney/Extensions/* /bitnami/suitecrm/public/legacy/custom/Extension/ 2>/dev/null || true
+elif [ -d "/bitnami/suitecrm/modules/LeadJourney/Extensions" ]; then
     cp -r /bitnami/suitecrm/modules/LeadJourney/Extensions/* /bitnami/suitecrm/public/legacy/custom/Extension/ 2>/dev/null || true
 fi
 
-if [ -d "/bitnami/suitecrm/modules/TwilioIntegration/Extensions" ]; then
+# TwilioIntegration extensions
+if [ -d "/opt/bitnami/suitecrm/modules/TwilioIntegration/Extensions" ]; then
+    cp -r /opt/bitnami/suitecrm/modules/TwilioIntegration/Extensions/* /bitnami/suitecrm/public/legacy/custom/Extension/ 2>/dev/null || true
+elif [ -d "/bitnami/suitecrm/modules/TwilioIntegration/Extensions" ]; then
     cp -r /bitnami/suitecrm/modules/TwilioIntegration/Extensions/* /bitnami/suitecrm/public/legacy/custom/Extension/ 2>/dev/null || true
 fi
 
-if [ -d "/bitnami/suitecrm/modules/VerbacallIntegration/Extensions" ]; then
+# VerbacallIntegration extensions
+if [ -d "/opt/bitnami/suitecrm/modules/VerbacallIntegration/Extensions" ]; then
+    cp -r /opt/bitnami/suitecrm/modules/VerbacallIntegration/Extensions/* /bitnami/suitecrm/public/legacy/custom/Extension/ 2>/dev/null || true
+elif [ -d "/bitnami/suitecrm/modules/VerbacallIntegration/Extensions" ]; then
     cp -r /bitnami/suitecrm/modules/VerbacallIntegration/Extensions/* /bitnami/suitecrm/public/legacy/custom/Extension/ 2>/dev/null || true
 fi
 
 # Copy main custom Extensions (includes PowerPackModules.php for nav display)
-if [ -d "/bitnami/suitecrm/custom/Extension" ]; then
+if [ -d "/opt/bitnami/suitecrm/custom/Extension" ]; then
+    cp -r /opt/bitnami/suitecrm/custom/Extension/* /bitnami/suitecrm/public/legacy/custom/Extension/ 2>/dev/null || true
+elif [ -d "/bitnami/suitecrm/custom/Extension" ]; then
     cp -r /bitnami/suitecrm/custom/Extension/* /bitnami/suitecrm/public/legacy/custom/Extension/ 2>/dev/null || true
 fi
 
 # Create ActionDefs directory and copy custom ACL action definitions
 mkdir -p /bitnami/suitecrm/public/legacy/custom/Extension/application/Ext/ActionDefs
-if [ -f "/bitnami/suitecrm/custom/Extension/application/Ext/ActionDefs/PowerPackActions.php" ]; then
+if [ -f "/opt/bitnami/suitecrm/custom/Extension/application/Ext/ActionDefs/PowerPackActions.php" ]; then
+    cp /opt/bitnami/suitecrm/custom/Extension/application/Ext/ActionDefs/PowerPackActions.php /bitnami/suitecrm/public/legacy/custom/Extension/application/Ext/ActionDefs/
+elif [ -f "/bitnami/suitecrm/custom/Extension/application/Ext/ActionDefs/PowerPackActions.php" ]; then
     cp /bitnami/suitecrm/custom/Extension/application/Ext/ActionDefs/PowerPackActions.php /bitnami/suitecrm/public/legacy/custom/Extension/application/Ext/ActionDefs/
 fi
 
