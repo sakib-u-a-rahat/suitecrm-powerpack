@@ -6,13 +6,14 @@ USER root
 # Remove readonly modifier from url_port to allow Bitnami to reassign it
 RUN sed -i 's/readonly url_port/url_port/g' /opt/bitnami/scripts/libsuitecrm.sh 2>/dev/null || true
 
-# Install additional dependencies including Node.js for WebSocket server
+# Install additional dependencies including Node.js for WebSocket server and PHP IMAP
 RUN apt-get update && apt-get install -y \
     git \
     curl \
     cron \
     default-mysql-client \
     gnupg \
+    php-imap \
     && curl -fsSL https://deb.nodesource.com/setup_18.x | bash - \
     && apt-get install -y nodejs \
     && rm -rf /var/lib/apt/lists/*
@@ -26,6 +27,7 @@ COPY --chown=daemon:daemon custom-modules/Packages /opt/bitnami/suitecrm/modules
 COPY --chown=daemon:daemon custom-modules/Webhooks /opt/bitnami/suitecrm/modules/Webhooks
 COPY --chown=daemon:daemon custom-modules/NotificationHub /opt/bitnami/suitecrm/modules/NotificationHub
 COPY --chown=daemon:daemon custom-modules/VerbacallIntegration /opt/bitnami/suitecrm/modules/VerbacallIntegration
+COPY --chown=daemon:daemon custom-modules/InboundEmail /opt/bitnami/suitecrm/modules/InboundEmail
 
 # Copy and setup WebSocket notification server
 COPY --chown=daemon:daemon config/notification-websocket /opt/bitnami/suitecrm/notification-websocket

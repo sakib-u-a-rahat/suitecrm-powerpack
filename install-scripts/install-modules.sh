@@ -13,7 +13,7 @@ if [ ! -f "/bitnami/suitecrm/public/legacy/config.php" ]; then
 fi
 
 # Verify modules exist (check both image source and runtime locations)
-for MODULE in TwilioIntegration LeadJourney FunnelDashboard SalesTargets Packages Webhooks NotificationHub VerbacallIntegration; do
+for MODULE in TwilioIntegration LeadJourney FunnelDashboard SalesTargets Packages Webhooks NotificationHub VerbacallIntegration InboundEmail; do
     # Check image source location first (where modules are stored in Docker image)
     if [ -f "/opt/bitnami/suitecrm/modules/$MODULE/$MODULE.php" ]; then
         echo "Found module: $MODULE (from image)"
@@ -44,7 +44,7 @@ mkdir -p /bitnami/suitecrm/public/legacy/custom/modules
 
 # Copy module files to legacy directory
 echo "Copying module files to legacy directory..."
-for MODULE in TwilioIntegration LeadJourney FunnelDashboard SalesTargets Packages Webhooks NotificationHub VerbacallIntegration; do
+for MODULE in TwilioIntegration LeadJourney FunnelDashboard SalesTargets Packages Webhooks NotificationHub VerbacallIntegration InboundEmail; do
     # Prefer image source location (for upgrades), fallback to volume location
     if [ -d "/opt/bitnami/suitecrm/modules/$MODULE" ]; then
         echo "  Copying $MODULE from image..."
@@ -223,6 +223,20 @@ $app_list_strings['moduleList']['LeadJourney'] = 'Lead Journey';
 $app_list_strings['moduleList']['Webhooks'] = 'Webhooks';
 $app_list_strings['moduleList']['NotificationHub'] = 'Notification Hub';
 // VerbacallIntegration is intentionally hidden from nav - it's Lead-specific only
+$app_list_strings['moduleList']['InboundEmail'] = 'Inbound Email';
+
+// Inbound Email Protocol dropdown
+$app_list_strings['inbound_email_protocol_list'] = array(
+    'imap' => 'IMAP',
+    'pop3' => 'POP3',
+);
+
+// Inbound Email Status dropdown
+$app_list_strings['inbound_email_status_list'] = array(
+    'active' => 'Active',
+    'inactive' => 'Inactive',
+    'error' => 'Error',
+);
 
 // ACL Action Labels for Role Management UI
 $app_strings['LBL_ACTION_CRO_DASHBOARD'] = 'CRO Dashboard';
@@ -271,6 +285,10 @@ $moduleList[] = 'NotificationHub';
 $beanList['VerbacallIntegration'] = 'VerbacallIntegration';
 $beanFiles['VerbacallIntegration'] = 'modules/VerbacallIntegration/VerbacallIntegration.php';
 // VerbacallIntegration not added to moduleList - it's Lead-specific only
+
+$beanList['InboundEmail'] = 'InboundEmail';
+$beanFiles['InboundEmail'] = 'modules/InboundEmail/InboundEmail.php';
+$moduleList[] = 'InboundEmail';
 PHPEOF
 
 # Create the compiled extension file - SuiteCRM loads modules.ext.php (not Include.ext.php)
@@ -308,6 +326,10 @@ $moduleList[] = 'NotificationHub';
 $beanList['VerbacallIntegration'] = 'VerbacallIntegration';
 $beanFiles['VerbacallIntegration'] = 'modules/VerbacallIntegration/VerbacallIntegration.php';
 // VerbacallIntegration not added to moduleList - it's Lead-specific only
+
+$beanList['InboundEmail'] = 'InboundEmail';
+$beanFiles['InboundEmail'] = 'modules/InboundEmail/InboundEmail.php';
+$moduleList[] = 'InboundEmail';
 PHPEOF
 
 chown -R daemon:daemon /bitnami/suitecrm/public/legacy/custom/
@@ -368,6 +390,10 @@ ${SPACES}verbacall-integration:
 ${SPACES2}index: true
 ${SPACES2}list: true
 ${SPACES2}record: false
+${SPACES}inbound-email:
+${SPACES2}index: true
+${SPACES2}list: true
+${SPACES2}record: true
 YAMLEOF
         
         # Validate YAML syntax (if python3 available)
@@ -424,6 +450,10 @@ $module_name_map["NotificationHub"] = [
     "core" => "NotificationHub"
 ];
 // VerbacallIntegration not added to module_name_map - it's Lead-specific only
+$module_name_map["InboundEmail"] = [
+    "frontend" => "inbound-email",
+    "core" => "InboundEmail"
+];
 MAPEOF
         echo "  ✓ Module name mappings added"
     else
@@ -469,12 +499,12 @@ fi
 MYSQL_FLAGS="-h$SUITECRM_DATABASE_HOST -P$DB_PORT -u$SUITECRM_DATABASE_USER -p$SUITECRM_DATABASE_PASSWORD $SSL_OPTS $SUITECRM_DATABASE_NAME"
 
 # Check if tables already exist
-TABLES_EXIST=$(mysql -h"$SUITECRM_DATABASE_HOST" -P"$DB_PORT" -u"$SUITECRM_DATABASE_USER" -p"$SUITECRM_DATABASE_PASSWORD" $SSL_OPTS "$SUITECRM_DATABASE_NAME" -sN -e "SELECT COUNT(*) FROM information_schema.tables WHERE table_schema='$SUITECRM_DATABASE_NAME' AND table_name IN ('twilio_integration', 'twilio_audit_log', 'lead_journey', 'funnel_dashboard', 'sales_targets', 'packages', 'notification_queue', 'notification_api_keys', 'notification_rate_limit');" 2>/dev/null || echo "0")
+TABLES_EXIST=$(mysql -h"$SUITECRM_DATABASE_HOST" -P"$DB_PORT" -u"$SUITECRM_DATABASE_USER" -p"$SUITECRM_DATABASE_PASSWORD" $SSL_OPTS "$SUITECRM_DATABASE_NAME" -sN -e "SELECT COUNT(*) FROM information_schema.tables WHERE table_schema='$SUITECRM_DATABASE_NAME' AND table_name IN ('twilio_integration', 'twilio_audit_log', 'lead_journey', 'funnel_dashboard', 'sales_targets', 'packages', 'notification_queue', 'notification_api_keys', 'notification_rate_limit', 'inbound_email_config');" 2>/dev/null || echo "0")
 
-if [ "$TABLES_EXIST" = "9" ]; then
+if [ "$TABLES_EXIST" = "10" ]; then
     echo "All module tables already exist, skipping migration"
 else
-    echo "Creating database tables (found $TABLES_EXIST/9 tables)..."
+    echo "Creating database tables (found $TABLES_EXIST/10 tables)..."
     mysql -h"$SUITECRM_DATABASE_HOST" -P"$DB_PORT" -u"$SUITECRM_DATABASE_USER" -p"$SUITECRM_DATABASE_PASSWORD" $SSL_OPTS "$SUITECRM_DATABASE_NAME" <<'EOF'
 
 -- Twilio Integration table
@@ -647,6 +677,34 @@ CREATE TABLE IF NOT EXISTS notification_rate_limit (
     INDEX idx_ip_time (ip_address, created_at)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
 
+-- Inbound Email Configuration table
+CREATE TABLE IF NOT EXISTS inbound_email_config (
+    id VARCHAR(36) NOT NULL PRIMARY KEY,
+    name VARCHAR(255) NOT NULL,
+    date_entered DATETIME,
+    date_modified DATETIME,
+    modified_user_id VARCHAR(36),
+    created_by VARCHAR(36),
+    description TEXT,
+    deleted TINYINT(1) DEFAULT 0,
+    assigned_user_id VARCHAR(36),
+    server VARCHAR(255) NOT NULL,
+    port INT DEFAULT 993,
+    protocol VARCHAR(10) DEFAULT 'imap',
+    username VARCHAR(255) NOT NULL,
+    password_enc VARCHAR(500),
+    ssl TINYINT(1) DEFAULT 1,
+    folder VARCHAR(100) DEFAULT 'INBOX',
+    polling_interval INT DEFAULT 300,
+    last_poll_date DATETIME,
+    last_uid INT DEFAULT 0,
+    status VARCHAR(20) DEFAULT 'active',
+    auto_import TINYINT(1) DEFAULT 1,
+    delete_after_import TINYINT(1) DEFAULT 0,
+    INDEX idx_status (status, deleted),
+    INDEX idx_assigned (assigned_user_id)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
+
 EOF
 
     # Add custom fields to leads table (MySQL 8 compatible - check before adding)
@@ -708,6 +766,18 @@ EOF
             ADD COLUMN verbacall_link_sent_c DATETIME DEFAULT NULL,
             ADD INDEX idx_verbacall_signup_c (verbacall_signup_c);
     " 2>/dev/null && echo "  Verbacall fields added to leads" || echo "  Verbacall fields already exist in leads"
+
+    # Add recording_url and assigned_user_id columns to lead_journey table
+    echo "Adding recording columns to lead_journey table..."
+    mysql -h"$SUITECRM_DATABASE_HOST" -P"$DB_PORT" -u"$SUITECRM_DATABASE_USER" -p"$SUITECRM_DATABASE_PASSWORD" $SSL_OPTS "$SUITECRM_DATABASE_NAME" -sN -e "
+        SELECT COUNT(*) FROM information_schema.columns
+        WHERE table_schema='$SUITECRM_DATABASE_NAME' AND table_name='lead_journey' AND column_name='recording_url'
+    " | grep -q '^0$' && mysql -h"$SUITECRM_DATABASE_HOST" -P"$DB_PORT" -u"$SUITECRM_DATABASE_USER" -p"$SUITECRM_DATABASE_PASSWORD" $SSL_OPTS "$SUITECRM_DATABASE_NAME" -e "
+        ALTER TABLE lead_journey
+            ADD COLUMN recording_url VARCHAR(500) DEFAULT NULL,
+            ADD COLUMN assigned_user_id VARCHAR(36) DEFAULT NULL,
+            ADD INDEX idx_assigned_user (assigned_user_id);
+    " 2>/dev/null && echo "  Recording columns added to lead_journey" || echo "  Recording columns already exist in lead_journey"
 
     echo "Database tables and custom fields setup complete"
 fi
@@ -834,6 +904,27 @@ FROM DUAL WHERE NOT EXISTS (SELECT 1 FROM acl_actions WHERE category='VerbacallI
 INSERT INTO acl_actions (id, date_entered, date_modified, modified_user_id, created_by, name, category, acltype, aclaccess, deleted)
 SELECT UUID(), NOW(), NOW(), '1', '1', 'list', 'VerbacallIntegration', 'module', 90, 0
 FROM DUAL WHERE NOT EXISTS (SELECT 1 FROM acl_actions WHERE category='VerbacallIntegration' AND name='list' AND deleted=0);
+
+-- InboundEmail standard actions
+INSERT INTO acl_actions (id, date_entered, date_modified, modified_user_id, created_by, name, category, acltype, aclaccess, deleted)
+SELECT UUID(), NOW(), NOW(), '1', '1', 'access', 'InboundEmail', 'module', 89, 0
+FROM DUAL WHERE NOT EXISTS (SELECT 1 FROM acl_actions WHERE category='InboundEmail' AND name='access' AND deleted=0);
+
+INSERT INTO acl_actions (id, date_entered, date_modified, modified_user_id, created_by, name, category, acltype, aclaccess, deleted)
+SELECT UUID(), NOW(), NOW(), '1', '1', 'view', 'InboundEmail', 'module', 90, 0
+FROM DUAL WHERE NOT EXISTS (SELECT 1 FROM acl_actions WHERE category='InboundEmail' AND name='view' AND deleted=0);
+
+INSERT INTO acl_actions (id, date_entered, date_modified, modified_user_id, created_by, name, category, acltype, aclaccess, deleted)
+SELECT UUID(), NOW(), NOW(), '1', '1', 'list', 'InboundEmail', 'module', 90, 0
+FROM DUAL WHERE NOT EXISTS (SELECT 1 FROM acl_actions WHERE category='InboundEmail' AND name='list' AND deleted=0);
+
+INSERT INTO acl_actions (id, date_entered, date_modified, modified_user_id, created_by, name, category, acltype, aclaccess, deleted)
+SELECT UUID(), NOW(), NOW(), '1', '1', 'edit', 'InboundEmail', 'module', 90, 0
+FROM DUAL WHERE NOT EXISTS (SELECT 1 FROM acl_actions WHERE category='InboundEmail' AND name='edit' AND deleted=0);
+
+INSERT INTO acl_actions (id, date_entered, date_modified, modified_user_id, created_by, name, category, acltype, aclaccess, deleted)
+SELECT UUID(), NOW(), NOW(), '1', '1', 'delete', 'InboundEmail', 'module', 90, 0
+FROM DUAL WHERE NOT EXISTS (SELECT 1 FROM acl_actions WHERE category='InboundEmail' AND name='delete' AND deleted=0);
 
 EOF
     echo "  ✓ Standard ACL actions registered"
