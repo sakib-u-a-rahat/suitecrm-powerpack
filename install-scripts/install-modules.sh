@@ -42,6 +42,12 @@ mkdir -p /bitnami/suitecrm/public/legacy/custom/application/Ext/Include
 mkdir -p /bitnami/suitecrm/public/legacy/custom/Extension/modules
 mkdir -p /bitnami/suitecrm/public/legacy/custom/modules
 
+# Create Layoutdefs directories for subpanels
+mkdir -p /bitnami/suitecrm/public/legacy/custom/Extension/modules/Leads/Ext/Layoutdefs
+mkdir -p /bitnami/suitecrm/public/legacy/custom/Extension/modules/Leads/Ext/Language
+mkdir -p /bitnami/suitecrm/public/legacy/custom/Extension/modules/Contacts/Ext/Layoutdefs
+mkdir -p /bitnami/suitecrm/public/legacy/custom/Extension/modules/Contacts/Ext/Language
+
 # Copy module files to legacy directory
 echo "Copying module files to legacy directory..."
 for MODULE in TwilioIntegration LeadJourney FunnelDashboard SalesTargets Packages Webhooks NotificationHub VerbacallIntegration InboundEmail; do

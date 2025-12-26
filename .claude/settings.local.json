@@ -79,7 +79,10 @@
       "Bash(docker images:*)",
       "Bash(git tag:*)",
       "Bash(docker tag:*)",
-      "Skill(feature-dev:feature-dev)"
+      "Skill(feature-dev:feature-dev)",
+      "Bash(bash -n:*)",
+      "Bash(docker inspect:*)",
+      "Bash(timeout 5 docker exec:*)"
     ]
   }
 }
