@@ -86,12 +86,15 @@ class LeadJourneyLogger
             $touchpointData['document_id'] = $data['document_id'];
         }
 
+        // Use direction-specific touchpoint_type for proper filtering
+        $touchpointType = ($direction === 'inbound') ? 'call_inbound' : 'call_outbound';
+
         return self::createJourneyEntry([
             'parent_type' => $data['parent_type'],
             'parent_id' => $data['parent_id'],
             'name' => $name,
             'description' => $description,
-            'touchpoint_type' => 'call',
+            'touchpoint_type' => $touchpointType,
             'touchpoint_date' => $data['date'] ?? gmdate('Y-m-d H:i:s'),
             'touchpoint_data' => json_encode($touchpointData),
             'source' => 'twilio',
@@ -158,12 +161,15 @@ class LeadJourneyLogger
             $touchpointData['media_urls'] = $data['media_urls'];
         }
 
+        // Use direction-specific touchpoint_type for proper filtering
+        $touchpointType = ($direction === 'inbound') ? 'sms_inbound' : 'sms_outbound';
+
         return self::createJourneyEntry([
             'parent_type' => $data['parent_type'],
             'parent_id' => $data['parent_id'],
             'name' => $name,
             'description' => $description,
-            'touchpoint_type' => 'sms',
+            'touchpoint_type' => $touchpointType,
             'touchpoint_date' => $data['date'] ?? gmdate('Y-m-d H:i:s'),
             'touchpoint_data' => json_encode($touchpointData),
             'source' => 'twilio',
@@ -224,12 +230,15 @@ class LeadJourneyLogger
             'in_reply_to' => $data['in_reply_to'] ?? ''
         ];
 
+        // Use direction-specific touchpoint_type for proper filtering
+        $touchpointType = ($direction === 'inbound') ? 'email_inbound' : 'email_outbound';
+
         return self::createJourneyEntry([
             'parent_type' => $data['parent_type'],
             'parent_id' => $data['parent_id'],
             'name' => $name,
             'description' => $description,
-            'touchpoint_type' => 'email',
+            'touchpoint_type' => $touchpointType,
             'touchpoint_date' => $data['date'] ?? gmdate('Y-m-d H:i:s'),
             'touchpoint_data' => json_encode($touchpointData),
             'source' => $data['source'] ?? 'email',
@@ -377,7 +386,9 @@ class LeadJourneyLogger
         $touchpointData = $db->quote($data['touchpoint_data'] ?? '{}');
         $source = $db->quote($data['source'] ?? '');
         $assignedUserId = $db->quote($data['assigned_user_id'] ?? '');
-        $userId = isset($GLOBALS['current_user']) ? $db->quote($GLOBALS['current_user']->id) : "''";
+        $userId = isset($GLOBALS['current_user']) && !empty($GLOBALS['current_user']->id)
+            ? "'" . $db->quote($GLOBALS['current_user']->id) . "'"
+            : "''";
 
         // Check if recording_url column exists
         $columns = $db->get_columns('lead_journey');
@@ -402,7 +413,13 @@ class LeadJourneyLogger
                     '$assignedUserId'{$recordingUrlValue}
                 )";
 
-        $db->query($sql);
+        $result = $db->query($sql, false);
+
+        if (!$result) {
+            $GLOBALS['log']->error("LeadJourneyLogger: INSERT FAILED - " . $db->lastError());
+            $GLOBALS['log']->error("LeadJourneyLogger: SQL was: " . substr($sql, 0, 500));
+            return null;
+        }
 
         $GLOBALS['log']->info("LeadJourneyLogger: Created journey entry $id for {$data['parent_type']} {$data['parent_id']}");
 

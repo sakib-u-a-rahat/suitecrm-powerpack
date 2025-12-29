@@ -102,6 +102,23 @@ if [ ! -f "/bitnami/suitecrm/public/index.php" ]; then
         fi
     fi
 
+    # Copy LeadJourney buttons JS (Timeline/Recordings buttons for Angular)
+    if [ -f "/opt/bitnami/suitecrm/dist/leadjourney-buttons.js" ]; then
+        echo "Installing LeadJourney buttons script..."
+        cp /opt/bitnami/suitecrm/dist/leadjourney-buttons.js /bitnami/suitecrm/public/dist/leadjourney-buttons.js
+        cp /opt/bitnami/suitecrm/dist/leadjourney-buttons.js /bitnami/suitecrm/public/leadjourney-buttons.js
+        chmod 644 /bitnami/suitecrm/public/dist/leadjourney-buttons.js /bitnami/suitecrm/public/leadjourney-buttons.js
+        chown daemon:daemon /bitnami/suitecrm/public/dist/leadjourney-buttons.js /bitnami/suitecrm/public/leadjourney-buttons.js
+
+        # Inject script tag into index.html if not already present
+        if [ -f "/bitnami/suitecrm/public/dist/index.html" ]; then
+            if ! grep -q "leadjourney-buttons.js" /bitnami/suitecrm/public/dist/index.html; then
+                echo "Injecting LeadJourney buttons script into Angular UI..."
+                sed -i 's|</body>|<script src="leadjourney-buttons.js"></script>\n</body>|' /bitnami/suitecrm/public/dist/index.html
+            fi
+        fi
+    fi
+
     # Set ownership and permissions
     echo "Setting ownership and permissions..."
     chown -R daemon:daemon /bitnami/suitecrm
@@ -317,6 +334,21 @@ if [ -f "/bitnami/suitecrm/config.php" ] || [ -f "/bitnami/suitecrm/public/legac
             if ! grep -q "verbacall-integration.js" /bitnami/suitecrm/public/dist/index.html; then
                 sed -i 's|</body>|<script src="verbacall-integration.js"></script>\n</body>|' /bitnami/suitecrm/public/dist/index.html
                 echo "Verbacall integration script injected into Angular UI"
+            fi
+        fi
+    fi
+
+    # Sync LeadJourney buttons JS and inject into index.html
+    if [ -f "/opt/bitnami/suitecrm/dist/leadjourney-buttons.js" ]; then
+        cp /opt/bitnami/suitecrm/dist/leadjourney-buttons.js /bitnami/suitecrm/public/dist/leadjourney-buttons.js 2>/dev/null || true
+        cp /opt/bitnami/suitecrm/dist/leadjourney-buttons.js /bitnami/suitecrm/public/leadjourney-buttons.js 2>/dev/null || true
+        chmod 644 /bitnami/suitecrm/public/dist/leadjourney-buttons.js /bitnami/suitecrm/public/leadjourney-buttons.js 2>/dev/null || true
+        chown daemon:daemon /bitnami/suitecrm/public/dist/leadjourney-buttons.js /bitnami/suitecrm/public/leadjourney-buttons.js 2>/dev/null || true
+        # Inject script tag into index.html if not already present
+        if [ -f "/bitnami/suitecrm/public/dist/index.html" ]; then
+            if ! grep -q "leadjourney-buttons.js" /bitnami/suitecrm/public/dist/index.html; then
+                sed -i 's|</body>|<script src="leadjourney-buttons.js"></script>\n</body>|' /bitnami/suitecrm/public/dist/index.html
+                echo "LeadJourney buttons script injected into Angular UI"
             fi
         fi
     fi

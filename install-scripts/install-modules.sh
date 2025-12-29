@@ -97,6 +97,20 @@ elif [ -d "/bitnami/suitecrm/custom/Extension" ]; then
     cp -r /bitnami/suitecrm/custom/Extension/* /bitnami/suitecrm/public/legacy/custom/Extension/ 2>/dev/null || true
 fi
 
+# Copy custom views for Leads and Contacts (Timeline/Recordings buttons)
+echo "Installing custom detail views..."
+mkdir -p /bitnami/suitecrm/public/legacy/custom/modules/Leads/views
+mkdir -p /bitnami/suitecrm/public/legacy/custom/modules/Contacts/views
+
+if [ -f "/opt/bitnami/suitecrm/custom/Extension/modules/Leads/views/view.detail.php" ]; then
+    cp /opt/bitnami/suitecrm/custom/Extension/modules/Leads/views/view.detail.php /bitnami/suitecrm/public/legacy/custom/modules/Leads/views/
+    echo "  Copied Leads detail view"
+fi
+if [ -f "/opt/bitnami/suitecrm/custom/Extension/modules/Contacts/views/view.detail.php" ]; then
+    cp /opt/bitnami/suitecrm/custom/Extension/modules/Contacts/views/view.detail.php /bitnami/suitecrm/public/legacy/custom/modules/Contacts/views/
+    echo "  Copied Contacts detail view"
+fi
+
 # Create ActionDefs directory and copy custom ACL action definitions
 mkdir -p /bitnami/suitecrm/public/legacy/custom/Extension/application/Ext/ActionDefs
 if [ -f "/opt/bitnami/suitecrm/custom/Extension/application/Ext/ActionDefs/PowerPackActions.php" ]; then
@@ -564,10 +578,19 @@ CREATE TABLE IF NOT EXISTS lead_journey (
     touchpoint_data TEXT,
     source VARCHAR(255),
     campaign_id VARCHAR(36),
+    assigned_user_id VARCHAR(36),
+    thread_id VARCHAR(64),
+    recording_url VARCHAR(500),
     INDEX idx_parent (parent_type, parent_id),
     INDEX idx_touchpoint_date (touchpoint_date),
-    INDEX idx_deleted (deleted)
+    INDEX idx_deleted (deleted),
+    INDEX idx_thread_id (thread_id)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
+
+-- Add columns if table exists (for upgrades)
+ALTER TABLE lead_journey ADD COLUMN IF NOT EXISTS assigned_user_id VARCHAR(36);
+ALTER TABLE lead_journey ADD COLUMN IF NOT EXISTS thread_id VARCHAR(64);
+ALTER TABLE lead_journey ADD COLUMN IF NOT EXISTS recording_url VARCHAR(500);
 
 -- Funnel Dashboard table
 CREATE TABLE IF NOT EXISTS funnel_dashboard (

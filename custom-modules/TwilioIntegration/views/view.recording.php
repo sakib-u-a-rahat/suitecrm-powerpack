@@ -30,15 +30,18 @@ class TwilioIntegrationViewRecording extends SugarView
         $recordingId = isset($_REQUEST['recording_id']) ? $_REQUEST['recording_id'] : '';
         $documentId = isset($_REQUEST['document_id']) ? $_REQUEST['document_id'] : '';
         $callSid = isset($_REQUEST['call_sid']) ? $_REQUEST['call_sid'] : '';
+        $file = isset($_REQUEST['file']) ? $_REQUEST['file'] : '';
 
-        if (!empty($documentId)) {
+        if (!empty($file)) {
+            $this->serveLocalFile($file);
+        } elseif (!empty($documentId)) {
             $this->serveFromDocument($documentId);
         } elseif (!empty($recordingId)) {
             $this->serveFromTwilio($recordingId);
         } elseif (!empty($callSid)) {
             $this->serveByCallSid($callSid);
         } else {
-            $this->sendError(400, 'Missing recording identifier (recording_id, document_id, or call_sid)');
+            $this->sendError(400, 'Missing recording identifier (recording_id, document_id, call_sid, or file)');
         }
     }
 
@@ -88,6 +91,35 @@ class TwilioIntegrationViewRecording extends SugarView
         }
 
         return false;
+    }
+
+    /**
+     * Serve a recording from local storage by filename
+     */
+    private function serveLocalFile($filename)
+    {
+        global $sugar_config;
+
+        // Prevent directory traversal attacks
+        $filename = basename($filename);
+
+        $storagePath = $sugar_config['twilio_recording_path'] ?? 'upload/twilio_recordings';
+
+        if (strpos($storagePath, 'upload://') === 0) {
+            $storagePath = str_replace('upload://', 'upload/', $storagePath);
+        }
+
+        $filepath = $storagePath . '/' . $filename;
+
+        if (!file_exists($filepath)) {
+            $this->sendError(404, 'Recording file not found');
+            return;
+        }
+
+        // Log access for audit
+        $this->logRecordingAccess($filename, 'local_file');
+
+        $this->serveFile($filepath, $filename, 'audio/mpeg');
     }
 
     /**

@@ -87,39 +87,68 @@ class LeadJourneyViewRecordings extends SugarView
 
         $recordings = array();
 
-        // Build phone conditions
-        $phoneConditions = array();
+        // Build phone search patterns for JSON data
+        $phonePatterns = array();
         foreach ($phoneNumbers as $phone) {
             $normalized = $this->normalizePhone($phone);
             if (strlen($normalized) >= 10) {
                 $last10 = substr($normalized, -10);
-                $phoneConditions[] = "from_number LIKE '%" . $db->quote($last10) . "%'";
-                $phoneConditions[] = "to_number LIKE '%" . $db->quote($last10) . "%'";
+                $phonePatterns[] = $last10;
             }
         }
 
-        // Also match by parent_id directly
-        $parentCondition = "(parent_type = " . $db->quoted($parentType) . " AND parent_id = " . $db->quoted($parentId) . ")";
-
-        $whereClause = $parentCondition;
-        if (!empty($phoneConditions)) {
-            $whereClause .= " OR (" . implode(' OR ', $phoneConditions) . ")";
-        }
-
-        $sql = "SELECT id, call_sid, recording_sid, recording_url, from_number, to_number,
-                       direction, call_status, duration, date_entered, parent_type, parent_id
+        // Query twilio_audit_log for recordings
+        // The data is stored as JSON in the 'data' column
+        $sql = "SELECT id, action, data, date_created
                 FROM twilio_audit_log
-                WHERE ($whereClause)
-                AND recording_url IS NOT NULL
-                AND recording_url != ''
-                AND deleted = 0
-                ORDER BY date_entered DESC
-                LIMIT 100";
+                WHERE (action LIKE '%recording%' OR action LIKE '%call%')
+                ORDER BY date_created DESC
+                LIMIT 200";
 
         $result = $db->query($sql);
 
         while ($row = $db->fetchByAssoc($result)) {
-            $recordings[] = $row;
+            $data = json_decode($row['data'], true);
+            if (!$data) continue;
+
+            // Check if this entry has a recording URL
+            $recordingUrl = $data['recording_url'] ?? $data['RecordingUrl'] ?? '';
+            if (empty($recordingUrl)) continue;
+
+            // Extract phone numbers from data
+            $fromNumber = $data['from_number'] ?? $data['From'] ?? $data['Caller'] ?? '';
+            $toNumber = $data['to_number'] ?? $data['To'] ?? $data['Called'] ?? '';
+
+            // Check if this call matches the lead's phone numbers
+            $matches = false;
+            if (!empty($phonePatterns)) {
+                foreach ($phonePatterns as $pattern) {
+                    if (strpos($this->normalizePhone($fromNumber), $pattern) !== false ||
+                        strpos($this->normalizePhone($toNumber), $pattern) !== false) {
+                        $matches = true;
+                        break;
+                    }
+                }
+            }
+
+            // Also match by parent_id in the data
+            $dataParentId = $data['parent_id'] ?? $data['lead_id'] ?? $data['contact_id'] ?? '';
+            if ($dataParentId === $parentId) {
+                $matches = true;
+            }
+
+            if ($matches) {
+                $recordings[] = array(
+                    'id' => $row['id'],
+                    'recording_url' => $recordingUrl,
+                    'from_number' => $fromNumber,
+                    'to_number' => $toNumber,
+                    'direction' => $data['direction'] ?? $data['Direction'] ?? 'outbound',
+                    'duration' => $data['duration'] ?? $data['RecordingDuration'] ?? $data['CallDuration'] ?? 0,
+                    'date_entered' => $row['date_created'],
+                    'call_sid' => $data['call_sid'] ?? $data['CallSid'] ?? '',
+                );
+            }
         }
 
         return $recordings;

@@ -125,54 +125,72 @@ function normalizePhone($phone)
 
 /**
  * Get recordings from twilio_audit_log linked to these phone numbers
+ * The audit log stores data as JSON in the 'data' column
  */
 function getRecordingsFromAuditLog($parentType, $parentId, $phoneNumbers)
 {
     global $db;
 
     $documents = array();
-    $phoneList = array();
+    $phonePatterns = array();
 
     foreach ($phoneNumbers as $phone) {
         $normalized = normalizePhone($phone);
         if (strlen($normalized) >= 10) {
-            $phoneList[] = $db->quoted('%' . substr($normalized, -10) . '%');
+            $phonePatterns[] = substr($normalized, -10);
         }
     }
 
-    if (empty($phoneList)) {
-        return $documents;
-    }
-
-    // Build LIKE conditions for phone matching
-    $phoneConditions = array();
-    foreach ($phoneList as $phone) {
-        $phoneConditions[] = "from_number LIKE $phone";
-        $phoneConditions[] = "to_number LIKE $phone";
-    }
-    $phoneWhere = '(' . implode(' OR ', $phoneConditions) . ')';
-
-    $sql = "SELECT recording_url, recording_sid, call_sid, from_number, to_number, date_entered
+    // Query twilio_audit_log for recordings (data stored as JSON)
+    $sql = "SELECT id, action, data, date_created
             FROM twilio_audit_log
-            WHERE $phoneWhere
-            AND recording_url IS NOT NULL
-            AND recording_url != ''
-            AND deleted = 0
-            ORDER BY date_entered DESC
-            LIMIT 50";
+            WHERE (action LIKE '%recording%' OR action LIKE '%call%')
+            ORDER BY date_created DESC
+            LIMIT 100";
 
     $result = $db->query($sql);
 
     while ($row = $db->fetchByAssoc($result)) {
-        // Create a pseudo-document bean for display
-        $doc = new stdClass();
-        $doc->id = $row['call_sid'] ?? create_guid();
-        $doc->document_name = 'Call Recording - ' . date('M j, Y g:i A', strtotime($row['date_entered']));
-        $doc->description = "From: {$row['from_number']} → To: {$row['to_number']}";
-        $doc->date_entered = $row['date_entered'];
-        $doc->recording_url = $row['recording_url'];
-        $doc->category_id = 'CallRecording';
-        $documents[] = $doc;
+        $data = json_decode($row['data'], true);
+        if (!$data) continue;
+
+        // Check if this entry has a recording URL
+        $recordingUrl = $data['recording_url'] ?? $data['RecordingUrl'] ?? '';
+        if (empty($recordingUrl)) continue;
+
+        // Extract phone numbers from data
+        $fromNumber = $data['from_number'] ?? $data['From'] ?? $data['Caller'] ?? '';
+        $toNumber = $data['to_number'] ?? $data['To'] ?? $data['Called'] ?? '';
+
+        // Check if this call matches the lead's phone numbers
+        $matches = false;
+        if (!empty($phonePatterns)) {
+            foreach ($phonePatterns as $pattern) {
+                if (strpos(normalizePhone($fromNumber), $pattern) !== false ||
+                    strpos(normalizePhone($toNumber), $pattern) !== false) {
+                    $matches = true;
+                    break;
+                }
+            }
+        }
+
+        // Also match by parent_id in the data
+        $dataParentId = $data['parent_id'] ?? $data['lead_id'] ?? $data['contact_id'] ?? '';
+        if ($dataParentId === $parentId) {
+            $matches = true;
+        }
+
+        if ($matches) {
+            // Create a pseudo-document bean for display
+            $doc = new stdClass();
+            $doc->id = $data['call_sid'] ?? $data['CallSid'] ?? $row['id'];
+            $doc->document_name = 'Call Recording - ' . date('M j, Y g:i A', strtotime($row['date_created']));
+            $doc->description = "From: {$fromNumber} → To: {$toNumber}";
+            $doc->date_entered = $row['date_created'];
+            $doc->recording_url = $recordingUrl;
+            $doc->category_id = 'CallRecording';
+            $documents[] = $doc;
+        }
     }
 
     return $documents;
