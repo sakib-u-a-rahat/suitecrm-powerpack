@@ -1,7 +1,7 @@
 /**
  * LeadJourney Buttons for SuiteCRM 8 Angular Frontend
- * Injects Timeline, Recordings, and Communication buttons into Lead/Contact detail views
- * v2.3.0 - Added communication action buttons (Call, SMS, Email)
+ * Injects Timeline, Recordings buttons; Messenger-style compose bar in timeline modal
+ * v2.3.4 - Rich messenger bar with text input, channel selector, send button
  */
 (function() {
     'use strict';
@@ -17,6 +17,8 @@
     let currentFilter = 'all';
     let cachedTimelineData = null;
     let cachedRecordData = null; // Cache lead/contact data for communication actions
+    let currentModule = null;    // Current module for modal actions
+    let currentRecordId = null;  // Current record ID for modal actions
 
     // Type categories for filtering (includes legacy types without direction suffix)
     // Note: verbacall_signup_sent and verbacall_payment_email_sent are also emails
@@ -272,18 +274,22 @@
     /**
      * Open email compose
      */
-    async function openEmailCompose(module, recordId) {
+    async function openEmailCompose(module, recordId, prefillMessage = '') {
         const record = await fetchRecordData(module, recordId);
 
         // Navigate to email compose with parent context
-        const emailUrl = `#/emails/compose?return_module=${module}&return_id=${recordId}&parent_type=${module}&parent_id=${recordId}`;
+        let emailUrl = `#/emails/compose?return_module=${module}&return_id=${recordId}&parent_type=${module}&parent_id=${recordId}`;
 
         if (record.email) {
-            window.location.hash = emailUrl + '&to_addrs=' + encodeURIComponent(record.email);
-        } else {
-            // Open compose anyway, user can add recipient
-            window.location.hash = emailUrl;
+            emailUrl += '&to_addrs=' + encodeURIComponent(record.email);
         }
+
+        // Store prefill message in sessionStorage for the email compose to pick up
+        if (prefillMessage) {
+            sessionStorage.setItem('emailPrefillBody', prefillMessage);
+        }
+
+        window.location.hash = emailUrl;
     }
 
     /**
@@ -554,9 +560,42 @@
             </div>
         ` : '';
 
+        // Messenger-style compose bar at bottom of modal
+        const messengerBarHtml = showControls && currentModule && currentRecordId ? `
+            <div id="messenger-bar" style="padding: 12px 16px; background: #f8f9fa; border-top: 1px solid #dee2e6;">
+                <div style="display: flex; align-items: flex-end; gap: 10px;">
+                    <!-- Call Button -->
+                    <button id="modal-call-btn" style="display:inline-flex;align-items:center;justify-content:center;width:44px;height:44px;background:#198754;color:white;border:none;border-radius:50%;cursor:pointer;transition:all 0.2s;flex-shrink:0;" title="Make Call">
+                        <svg style="width:20px;height:20px" viewBox="0 0 24 24" fill="currentColor">
+                            <path d="M6.62 10.79c1.44 2.83 3.76 5.14 6.59 6.59l2.2-2.2c.27-.27.67-.36 1.02-.24 1.12.37 2.33.57 3.57.57.55 0 1 .45 1 1V20c0 .55-.45 1-1 1-9.39 0-17-7.61-17-17 0-.55.45-1 1-1h3.5c.55 0 1 .45 1 1 0 1.25.2 2.45.57 3.57.11.35.03.74-.25 1.02l-2.2 2.2z"/>
+                        </svg>
+                    </button>
+
+                    <!-- Message Input Area -->
+                    <div style="flex:1;display:flex;flex-direction:column;gap:8px;">
+                        <textarea id="messenger-input" placeholder="Type your message..." style="width:100%;min-height:60px;max-height:120px;padding:10px 12px;border:1px solid #dee2e6;border-radius:8px;font-size:14px;font-family:inherit;resize:vertical;outline:none;transition:border-color 0.2s;" onfocus="this.style.borderColor='#0d6efd'" onblur="this.style.borderColor='#dee2e6'"></textarea>
+                    </div>
+
+                    <!-- Channel Selector + Send -->
+                    <div style="display:flex;flex-direction:column;gap:6px;flex-shrink:0;">
+                        <select id="messenger-channel" style="padding:8px 12px;border:1px solid #dee2e6;border-radius:6px;font-size:13px;font-weight:500;background:white;cursor:pointer;outline:none;">
+                            <option value="sms">📱 SMS</option>
+                            <option value="email">✉️ Email</option>
+                        </select>
+                        <button id="modal-send-btn" style="display:inline-flex;align-items:center;justify-content:center;padding:10px 24px;background:#0d6efd;color:white;border:none;border-radius:6px;font-size:14px;font-weight:600;cursor:pointer;transition:all 0.2s;gap:6px;" title="Send Message">
+                            <span>Send</span>
+                            <svg style="width:16px;height:16px" viewBox="0 0 24 24" fill="currentColor">
+                                <path d="M2.01 21L23 12 2.01 3 2 10l15 2-15 2z"/>
+                            </svg>
+                        </button>
+                    </div>
+                </div>
+            </div>
+        ` : '';
+
         modal.innerHTML = `
             <div style="background: white; border-radius: 8px; max-width: 900px; width: 95%;
-                        max-height: 85vh; overflow: hidden; box-shadow: 0 4px 20px rgba(0,0,0,0.3);">
+                        max-height: 85vh; overflow: hidden; box-shadow: 0 4px 20px rgba(0,0,0,0.3); display: flex; flex-direction: column;">
                 <div style="padding: 16px 20px; background: #0d6efd; color: white;
                             display: flex; justify-content: space-between; align-items: center;">
                     <h3 style="margin: 0; font-size: 18px;">${title}</h3>
@@ -564,9 +603,10 @@
                             color: white; font-size: 24px; cursor: pointer; padding: 0 8px;">&times;</button>
                 </div>
                 ${controlsHtml}
-                <div id="leadjourney-content" style="padding: 20px; overflow-y: auto; max-height: calc(85vh - ${showControls ? '140px' : '60px'});">
+                <div id="leadjourney-content" style="padding: 20px; overflow-y: auto; flex: 1; max-height: calc(85vh - ${showControls ? '200px' : '120px'});">
                     ${content}
                 </div>
+                ${messengerBarHtml}
             </div>
         `;
 
@@ -581,6 +621,94 @@
                 document.removeEventListener('keydown', closeOnEsc);
             }
         });
+
+        // Messenger bar button handlers
+        if (showControls && currentModule && currentRecordId) {
+            const callBtn = document.getElementById('modal-call-btn');
+            const sendBtn = document.getElementById('modal-send-btn');
+            const channelSelect = document.getElementById('messenger-channel');
+            const messageInput = document.getElementById('messenger-input');
+
+            if (callBtn) {
+                callBtn.onmouseover = () => { callBtn.style.transform = 'scale(1.05)'; callBtn.style.background = '#157347'; };
+                callBtn.onmouseout = () => { callBtn.style.transform = 'scale(1)'; callBtn.style.background = '#198754'; };
+                callBtn.onclick = () => initiateCall(currentModule, currentRecordId);
+            }
+
+            if (sendBtn && channelSelect && messageInput) {
+                sendBtn.onmouseover = () => { sendBtn.style.background = '#0b5ed7'; };
+                sendBtn.onmouseout = () => { sendBtn.style.background = '#0d6efd'; };
+
+                sendBtn.onclick = async () => {
+                    const channel = channelSelect.value;
+                    const message = messageInput.value.trim();
+
+                    if (!message) {
+                        messageInput.style.borderColor = '#dc3545';
+                        messageInput.focus();
+                        setTimeout(() => messageInput.style.borderColor = '#dee2e6', 2000);
+                        return;
+                    }
+
+                    if (channel === 'sms') {
+                        // Send SMS directly
+                        sendBtn.disabled = true;
+                        sendBtn.innerHTML = '<span>Sending...</span>';
+
+                        try {
+                            const record = await fetchRecordData(currentModule, currentRecordId);
+                            if (!record || !record.phone) {
+                                alert('No phone number found for this record');
+                                sendBtn.disabled = false;
+                                sendBtn.innerHTML = '<span>Send</span><svg style="width:16px;height:16px" viewBox="0 0 24 24" fill="currentColor"><path d="M2.01 21L23 12 2.01 3 2 10l15 2-15 2z"/></svg>';
+                                return;
+                            }
+
+                            const formData = new FormData();
+                            formData.append('action_type', 'send');
+                            formData.append('to', record.phone);
+                            formData.append('message', message);
+                            formData.append('parent_type', currentModule);
+                            formData.append('parent_id', currentRecordId);
+
+                            const response = await fetch('legacy/index.php?module=TwilioIntegration&action=sendsms', {
+                                method: 'POST',
+                                body: formData,
+                                credentials: 'same-origin'
+                            });
+
+                            const result = await response.json();
+                            if (result.success) {
+                                messageInput.value = '';
+                                showNotification('SMS sent successfully!', 'success');
+                                // Refresh timeline
+                                setTimeout(() => showTimeline(currentModule, currentRecordId), 1000);
+                            } else {
+                                showNotification('Failed to send SMS: ' + (result.error || 'Unknown error'), 'error');
+                            }
+                        } catch (error) {
+                            showNotification('Error sending SMS: ' + error.message, 'error');
+                        }
+
+                        sendBtn.disabled = false;
+                        sendBtn.innerHTML = '<span>Send</span><svg style="width:16px;height:16px" viewBox="0 0 24 24" fill="currentColor"><path d="M2.01 21L23 12 2.01 3 2 10l15 2-15 2z"/></svg>';
+
+                    } else if (channel === 'email') {
+                        // Open email compose with pre-filled message
+                        modal.remove();
+                        openEmailCompose(currentModule, currentRecordId, message);
+                    }
+                };
+
+                // Enter key to send (Shift+Enter for new line)
+                messageInput.onkeydown = (e) => {
+                    if (e.key === 'Enter' && !e.shiftKey) {
+                        e.preventDefault();
+                        sendBtn.click();
+                    }
+                };
+            }
+        }
 
         return modal;
     }
@@ -813,6 +941,10 @@
      * Fetch and display timeline
      */
     async function showTimeline(module, recordId) {
+        // Store for modal action buttons
+        currentModule = module;
+        currentRecordId = recordId;
+
         showModal('Loading...', '<div style="text-align:center;padding:40px;">Loading timeline...</div>');
 
         try {
@@ -962,74 +1094,9 @@
         recordingsBtn.onmouseout = () => recordingsBtn.style.background = '#6c757d';
         recordingsBtn.onclick = () => showRecordings(module, recordId);
 
-        // Separator
-        const separator = document.createElement('span');
-        separator.style.cssText = 'width:1px;height:24px;background:#dee2e6;margin:0 4px;';
-
-        // Communication label
-        const commLabel = document.createElement('span');
-        commLabel.textContent = 'New:';
-        commLabel.style.cssText = 'font-size:12px;color:#6c757d;font-weight:600;text-transform:uppercase;letter-spacing:0.5px;margin-right:4px;';
-
-        // Call button
-        const callBtn = document.createElement('button');
-        callBtn.innerHTML = `
-            <svg style="width:16px;height:16px;margin-right:5px;vertical-align:middle" viewBox="0 0 24 24" fill="currentColor">
-                <path d="M6.62 10.79c1.44 2.83 3.76 5.14 6.59 6.59l2.2-2.2c.27-.27.67-.36 1.02-.24 1.12.37 2.33.57 3.57.57.55 0 1 .45 1 1V20c0 .55-.45 1-1 1-9.39 0-17-7.61-17-17 0-.55.45-1 1-1h3.5c.55 0 1 .45 1 1 0 1.25.2 2.45.57 3.57.11.35.03.74-.25 1.02l-2.2 2.2z"/>
-            </svg>
-            Call
-        `;
-        callBtn.style.cssText = `
-            display:inline-flex;align-items:center;padding:8px 14px;background:#198754;
-            color:white;border:none;border-radius:4px;font-size:13px;font-weight:500;
-            cursor:pointer;transition:background 0.2s;white-space:nowrap;
-        `;
-        callBtn.onmouseover = () => callBtn.style.background = '#157347';
-        callBtn.onmouseout = () => callBtn.style.background = '#198754';
-        callBtn.onclick = () => initiateCall(module, recordId);
-
-        // SMS button
-        const smsBtn = document.createElement('button');
-        smsBtn.innerHTML = `
-            <svg style="width:16px;height:16px;margin-right:5px;vertical-align:middle" viewBox="0 0 24 24" fill="currentColor">
-                <path d="M20 2H4c-1.1 0-2 .9-2 2v18l4-4h14c1.1 0 2-.9 2-2V4c0-1.1-.9-2-2-2zm0 14H6l-2 2V4h16v12z"/>
-            </svg>
-            SMS
-        `;
-        smsBtn.style.cssText = `
-            display:inline-flex;align-items:center;padding:8px 14px;background:#0dcaf0;
-            color:#000;border:none;border-radius:4px;font-size:13px;font-weight:500;
-            cursor:pointer;transition:background 0.2s;white-space:nowrap;
-        `;
-        smsBtn.onmouseover = () => smsBtn.style.background = '#0bb5d8';
-        smsBtn.onmouseout = () => smsBtn.style.background = '#0dcaf0';
-        smsBtn.onclick = () => showSmsCompose(module, recordId);
-
-        // Email button
-        const emailBtn = document.createElement('button');
-        emailBtn.innerHTML = `
-            <svg style="width:16px;height:16px;margin-right:5px;vertical-align:middle" viewBox="0 0 24 24" fill="currentColor">
-                <path d="M20 4H4c-1.1 0-2 .9-2 2v12c0 1.1.9 2 2 2h16c1.1 0 2-.9 2-2V6c0-1.1-.9-2-2-2zm0 4l-8 5-8-5V6l8 5 8-5v2z"/>
-            </svg>
-            Email
-        `;
-        emailBtn.style.cssText = `
-            display:inline-flex;align-items:center;padding:8px 14px;background:#6f42c1;
-            color:white;border:none;border-radius:4px;font-size:13px;font-weight:500;
-            cursor:pointer;transition:background 0.2s;white-space:nowrap;
-        `;
-        emailBtn.onmouseover = () => emailBtn.style.background = '#5a32a3';
-        emailBtn.onmouseout = () => emailBtn.style.background = '#6f42c1';
-        emailBtn.onclick = () => openEmailCompose(module, recordId);
-
         container.appendChild(label);
         container.appendChild(timelineBtn);
         container.appendChild(recordingsBtn);
-        container.appendChild(separator);
-        container.appendChild(commLabel);
-        container.appendChild(callBtn);
-        container.appendChild(smsBtn);
-        container.appendChild(emailBtn);
 
         return container;
     }
