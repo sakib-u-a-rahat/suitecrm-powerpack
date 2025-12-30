@@ -465,43 +465,45 @@ class TwilioIntegrationViewSendsms extends SugarView {
     
     private function sendSMS() {
         header('Content-Type: application/json');
-        
+
         $to = $_POST['to'] ?? '';
         $from = $_POST['from'] ?? '';
         $message = $_POST['message'] ?? '';
-        
+        $parentType = $_POST['parent_type'] ?? '';
+        $parentId = $_POST['parent_id'] ?? '';
+
         if (empty($to) || empty($message)) {
             echo json_encode(['success' => false, 'error' => 'Phone number and message are required']);
             exit;
         }
-        
+
         $config = $this->getTwilioConfig();
-        
+
         if (empty($config['account_sid']) || empty($config['auth_token'])) {
             echo json_encode(['success' => false, 'error' => 'Twilio is not configured']);
             exit;
         }
-        
+
         if (empty($from)) {
             $from = $config['phone_number'];
         }
-        
+
         try {
             global $sugar_config;
             // Use APP_URL env var for public webhook URLs (ngrok/production), fallback to site_url
             $siteUrl = getenv('APP_URL') ?: rtrim($sugar_config['site_url'] ?? '', '/');
             $siteUrl = rtrim($siteUrl, '/');
             $statusCallback = $siteUrl . '/legacy/twilio_webhook.php?action=sms';
-            
+
             $url = "https://api.twilio.com/2010-04-01/Accounts/{$config['account_sid']}/Messages.json";
-            
+
             $data = [
                 'To' => $to,
                 'From' => $from,
                 'Body' => $message,
                 'StatusCallback' => $statusCallback
             ];
-            
+
             $ch = curl_init($url);
             curl_setopt_array($ch, [
                 CURLOPT_POST => true,
@@ -510,23 +512,23 @@ class TwilioIntegrationViewSendsms extends SugarView {
                 CURLOPT_USERPWD => $config['account_sid'] . ':' . $config['auth_token'],
                 CURLOPT_TIMEOUT => 30
             ]);
-            
+
             $response = curl_exec($ch);
             $httpCode = curl_getinfo($ch, CURLINFO_HTTP_CODE);
             $error = curl_error($ch);
             curl_close($ch);
-            
+
             if ($error) {
                 echo json_encode(['success' => false, 'error' => 'Connection error: ' . $error]);
                 exit;
             }
-            
+
             $result = json_decode($response, true);
-            
+
             if ($httpCode >= 200 && $httpCode < 300 && isset($result['sid'])) {
-                // Log the SMS
-                $this->logSMSSent($result['sid'], $from, $to, $message, $result['status'] ?? 'sent');
-                
+                // Log the SMS - use provided parent if available
+                $this->logSMSSent($result['sid'], $from, $to, $message, $result['status'] ?? 'sent', $parentType, $parentId);
+
                 echo json_encode([
                     'success' => true,
                     'message_sid' => $result['sid'],
@@ -599,14 +601,21 @@ class TwilioIntegrationViewSendsms extends SugarView {
         exit;
     }
     
-    private function logSMSSent($messageSid, $from, $to, $message, $status) {
+    private function logSMSSent($messageSid, $from, $to, $message, $status, $parentType = '', $parentId = '') {
         global $current_user;
-        
+
         $GLOBALS['log']->info("Twilio: SMS sent - SID: $messageSid, From: $from, To: $to, User: " . ($current_user->id ?? 'unknown'));
-        
-        // Try to find contact/lead and create a note
-        $contact = $this->findContactByPhone($to);
-        
+
+        // Use provided parent if available, otherwise try to find by phone
+        if (!empty($parentType) && !empty($parentId)) {
+            $contact = [
+                'module' => $parentType,
+                'id' => $parentId
+            ];
+        } else {
+            $contact = $this->findContactByPhone($to);
+        }
+
         if ($contact) {
             try {
                 $note = BeanFactory::newBean('Notes');

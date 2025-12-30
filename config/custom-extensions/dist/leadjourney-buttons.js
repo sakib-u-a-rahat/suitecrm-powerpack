@@ -1,7 +1,7 @@
 /**
  * LeadJourney Buttons for SuiteCRM 8 Angular Frontend
- * Injects Timeline and Recordings buttons into Lead/Contact detail views
- * v2.2.1 - Fixed recording URLs with legacy/ prefix
+ * Injects Timeline, Recordings, and Communication buttons into Lead/Contact detail views
+ * v2.3.0 - Added communication action buttons (Call, SMS, Email)
  */
 (function() {
     'use strict';
@@ -16,6 +16,7 @@
     let currentViewMode = 'flat'; // 'flat' or 'threaded'
     let currentFilter = 'all';
     let cachedTimelineData = null;
+    let cachedRecordData = null; // Cache lead/contact data for communication actions
 
     // Type categories for filtering (includes legacy types without direction suffix)
     // Note: verbacall_signup_sent and verbacall_payment_email_sent are also emails
@@ -27,6 +28,307 @@
         verbacall: { label: 'Verbacall', types: ['verbacall_signup_sent', 'verbacall_discount_offer', 'verbacall_payment_email_sent'] },
         other: { label: 'Other', types: ['note', 'meeting', 'task'] }
     };
+
+    // Communication URLs
+    const COMM_CONFIG = {
+        callUrl: 'legacy/index.php?module=TwilioIntegration&action=makecall&phone=',
+        smsUrl: 'legacy/index.php?module=TwilioIntegration&action=sendsms&phone=',
+        emailComposeUrl: '#/emails/compose'
+    };
+
+    /**
+     * Fetch lead/contact record data for communication actions
+     */
+    async function fetchRecordData(module, recordId) {
+        if (cachedRecordData && cachedRecordData.id === recordId) {
+            return cachedRecordData;
+        }
+
+        try {
+            // Use SuiteCRM's GraphQL API to fetch record data
+            const moduleName = module.toLowerCase();
+            const response = await fetch(`api/graphql`, {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                },
+                body: JSON.stringify({
+                    query: `
+                        query GetRecord($module: String!, $id: ID!) {
+                            getRecord(module: $module, id: $id) {
+                                id
+                                attributes
+                            }
+                        }
+                    `,
+                    variables: {
+                        module: moduleName,
+                        id: recordId
+                    }
+                })
+            });
+
+            const data = await response.json();
+            if (data.data && data.data.getRecord) {
+                const attrs = data.data.getRecord.attributes || {};
+                cachedRecordData = {
+                    id: recordId,
+                    module: module,
+                    firstName: attrs.first_name || '',
+                    lastName: attrs.last_name || '',
+                    fullName: `${attrs.first_name || ''} ${attrs.last_name || ''}`.trim(),
+                    phone: attrs.phone_mobile || attrs.phone_work || attrs.phone_home || '',
+                    email: attrs.email1 || ''
+                };
+                return cachedRecordData;
+            }
+        } catch (error) {
+            console.error('[LeadJourney] Error fetching record data:', error);
+        }
+
+        // Fallback: try to extract from page
+        return extractRecordDataFromPage(module, recordId);
+    }
+
+    /**
+     * Extract record data from the current page DOM
+     */
+    function extractRecordDataFromPage(module, recordId) {
+        const data = {
+            id: recordId,
+            module: module,
+            firstName: '',
+            lastName: '',
+            fullName: '',
+            phone: '',
+            email: ''
+        };
+
+        // Try to find phone number from tel: links
+        const telLink = document.querySelector('a[href^="tel:"]');
+        if (telLink) {
+            data.phone = telLink.href.replace('tel:', '').trim();
+        }
+
+        // Try to find email from mailto: links
+        const mailtoLink = document.querySelector('a[href^="mailto:"]');
+        if (mailtoLink) {
+            data.email = mailtoLink.href.replace('mailto:', '').trim();
+        }
+
+        // Try to find name from page title or header
+        const titleEl = document.querySelector('.record-view-title, scrm-record-header h1, h1');
+        if (titleEl) {
+            data.fullName = titleEl.textContent.trim();
+        }
+
+        cachedRecordData = data;
+        return data;
+    }
+
+    /**
+     * Initiate a phone call
+     */
+    async function initiateCall(module, recordId) {
+        const record = await fetchRecordData(module, recordId);
+
+        if (!record.phone) {
+            showNotification('No phone number found for this record', 'warning');
+            return;
+        }
+
+        window.open(
+            COMM_CONFIG.callUrl + encodeURIComponent(record.phone) + '&parent_type=' + module + '&parent_id=' + recordId,
+            'TwilioCall',
+            'width=500,height=450,scrollbars=yes'
+        );
+    }
+
+    /**
+     * Show SMS compose modal
+     */
+    async function showSmsCompose(module, recordId) {
+        const record = await fetchRecordData(module, recordId);
+
+        if (!record.phone) {
+            showNotification('No phone number found for this record', 'warning');
+            return;
+        }
+
+        const existing = document.getElementById(MODAL_ID);
+        if (existing) existing.remove();
+
+        const modal = document.createElement('div');
+        modal.id = MODAL_ID;
+        modal.style.cssText = `
+            position: fixed; top: 0; left: 0; width: 100%; height: 100%;
+            background: rgba(0,0,0,0.5); z-index: 10000;
+            display: flex; align-items: center; justify-content: center;
+        `;
+
+        modal.innerHTML = `
+            <div style="background: white; border-radius: 8px; max-width: 500px; width: 95%;
+                        box-shadow: 0 4px 20px rgba(0,0,0,0.3);">
+                <div style="padding: 16px 20px; background: #0d6efd; color: white;
+                            display: flex; justify-content: space-between; align-items: center; border-radius: 8px 8px 0 0;">
+                    <h3 style="margin: 0; font-size: 18px;">Send SMS</h3>
+                    <button id="sms-modal-close" style="background: none; border: none;
+                            color: white; font-size: 24px; cursor: pointer; padding: 0 8px;">&times;</button>
+                </div>
+                <div style="padding: 20px;">
+                    <div style="margin-bottom: 16px;">
+                        <label style="display: block; font-weight: 600; margin-bottom: 6px; color: #495057;">To:</label>
+                        <div style="padding: 10px 12px; background: #f8f9fa; border-radius: 4px; border: 1px solid #dee2e6;">
+                            <span style="font-weight: 500;">${record.fullName || 'Unknown'}</span>
+                            <span style="color: #6c757d; margin-left: 8px;">${record.phone}</span>
+                        </div>
+                    </div>
+                    <div style="margin-bottom: 16px;">
+                        <label style="display: block; font-weight: 600; margin-bottom: 6px; color: #495057;">Message:</label>
+                        <textarea id="sms-message" style="width: 100%; min-height: 120px; padding: 12px;
+                                  border: 1px solid #dee2e6; border-radius: 4px; font-size: 14px; resize: vertical;
+                                  box-sizing: border-box;" placeholder="Type your message..."></textarea>
+                        <div style="text-align: right; font-size: 12px; color: #6c757d; margin-top: 4px;">
+                            <span id="sms-char-count">0</span>/160 characters
+                        </div>
+                    </div>
+                    <div style="display: flex; gap: 10px; justify-content: flex-end;">
+                        <button id="sms-cancel-btn" style="padding: 10px 20px; background: #6c757d; color: white;
+                                border: none; border-radius: 4px; cursor: pointer; font-weight: 500;">Cancel</button>
+                        <button id="sms-send-btn" style="padding: 10px 20px; background: #0d6efd; color: white;
+                                border: none; border-radius: 4px; cursor: pointer; font-weight: 500;">
+                            <span id="sms-send-text">Send SMS</span>
+                            <span id="sms-send-spinner" style="display: none;">Sending...</span>
+                        </button>
+                    </div>
+                </div>
+            </div>
+        `;
+
+        document.body.appendChild(modal);
+
+        // Event handlers
+        const messageEl = document.getElementById('sms-message');
+        const charCountEl = document.getElementById('sms-char-count');
+        const sendBtn = document.getElementById('sms-send-btn');
+        const cancelBtn = document.getElementById('sms-cancel-btn');
+        const closeBtn = document.getElementById('sms-modal-close');
+
+        messageEl.addEventListener('input', () => {
+            charCountEl.textContent = messageEl.value.length;
+        });
+
+        const closeModal = () => modal.remove();
+        closeBtn.onclick = closeModal;
+        cancelBtn.onclick = closeModal;
+        modal.onclick = (e) => { if (e.target === modal) closeModal(); };
+
+        sendBtn.onclick = async () => {
+            const message = messageEl.value.trim();
+            if (!message) {
+                showNotification('Please enter a message', 'warning');
+                return;
+            }
+
+            document.getElementById('sms-send-text').style.display = 'none';
+            document.getElementById('sms-send-spinner').style.display = 'inline';
+            sendBtn.disabled = true;
+
+            try {
+                const formData = new FormData();
+                formData.append('action_type', 'send');
+                formData.append('to', record.phone);
+                formData.append('message', message);
+                formData.append('parent_type', module);
+                formData.append('parent_id', recordId);
+
+                const response = await fetch('legacy/index.php?module=TwilioIntegration&action=sendsms', {
+                    method: 'POST',
+                    body: formData,
+                    credentials: 'same-origin'
+                });
+
+                const result = await response.json();
+
+                if (result.success) {
+                    showNotification('SMS sent successfully!', 'success');
+                    closeModal();
+                } else {
+                    showNotification(result.error || 'Failed to send SMS', 'error');
+                }
+            } catch (error) {
+                console.error('[LeadJourney] SMS error:', error);
+                showNotification('Failed to send SMS: ' + error.message, 'error');
+            } finally {
+                document.getElementById('sms-send-text').style.display = 'inline';
+                document.getElementById('sms-send-spinner').style.display = 'none';
+                sendBtn.disabled = false;
+            }
+        };
+
+        messageEl.focus();
+    }
+
+    /**
+     * Open email compose
+     */
+    async function openEmailCompose(module, recordId) {
+        const record = await fetchRecordData(module, recordId);
+
+        // Navigate to email compose with parent context
+        const emailUrl = `#/emails/compose?return_module=${module}&return_id=${recordId}&parent_type=${module}&parent_id=${recordId}`;
+
+        if (record.email) {
+            window.location.hash = emailUrl + '&to_addrs=' + encodeURIComponent(record.email);
+        } else {
+            // Open compose anyway, user can add recipient
+            window.location.hash = emailUrl;
+        }
+    }
+
+    /**
+     * Show notification toast
+     */
+    function showNotification(message, type = 'info') {
+        const existing = document.querySelectorAll('.leadjourney-notification');
+        existing.forEach(n => n.remove());
+
+        const colors = {
+            success: { bg: '#198754', icon: '✓' },
+            error: { bg: '#dc3545', icon: '✕' },
+            warning: { bg: '#ffc107', icon: '⚠', textColor: '#000' },
+            info: { bg: '#0d6efd', icon: 'ℹ' }
+        };
+
+        const config = colors[type] || colors.info;
+
+        const notification = document.createElement('div');
+        notification.className = 'leadjourney-notification';
+        notification.style.cssText = `
+            position: fixed; top: 20px; right: 20px; z-index: 10001;
+            padding: 12px 20px; border-radius: 6px; box-shadow: 0 4px 12px rgba(0,0,0,0.15);
+            background: ${config.bg}; color: ${config.textColor || 'white'};
+            font-size: 14px; font-weight: 500; display: flex; align-items: center; gap: 8px;
+            animation: slideIn 0.3s ease;
+        `;
+        notification.innerHTML = `<span>${config.icon}</span> ${message}`;
+
+        // Add animation styles
+        if (!document.getElementById('leadjourney-notification-styles')) {
+            const style = document.createElement('style');
+            style.id = 'leadjourney-notification-styles';
+            style.textContent = `
+                @keyframes slideIn {
+                    from { transform: translateX(100%); opacity: 0; }
+                    to { transform: translateX(0); opacity: 1; }
+                }
+            `;
+            document.head.appendChild(style);
+        }
+
+        document.body.appendChild(notification);
+        setTimeout(() => notification.remove(), 4000);
+    }
 
     /**
      * Get current module and record ID from URL
@@ -624,7 +926,7 @@
         // Label
         const label = document.createElement('span');
         label.textContent = 'PowerPack:';
-        label.style.cssText = 'font-size:12px;color:#6c757d;font-weight:600;text-transform:uppercase;letter-spacing:0.5px;';
+        label.style.cssText = 'font-size:12px;color:#6c757d;font-weight:600;text-transform:uppercase;letter-spacing:0.5px;margin-right:4px;';
 
         // Timeline button
         const timelineBtn = document.createElement('button');
@@ -632,10 +934,10 @@
             <svg style="width:16px;height:16px;margin-right:6px;vertical-align:middle" viewBox="0 0 24 24" fill="currentColor">
                 <path d="M12 8c-2.21 0-4 1.79-4 4s1.79 4 4 4 4-1.79 4-4-1.79-4-4-4zm8.94 3c-.46-4.17-3.77-7.48-7.94-7.94V1h-2v2.06C6.83 3.52 3.52 6.83 3.06 11H1v2h2.06c.46 4.17 3.77 7.48 7.94 7.94V23h2v-2.06c4.17-.46 7.48-3.77 7.94-7.94H23v-2h-2.06zM12 19c-3.87 0-7-3.13-7-7s3.13-7 7-7 7 3.13 7 7-3.13 7-7 7z"/>
             </svg>
-            Journey Timeline
+            Timeline
         `;
         timelineBtn.style.cssText = `
-            display:inline-flex;align-items:center;padding:8px 16px;background:#0d6efd;
+            display:inline-flex;align-items:center;padding:8px 14px;background:#0d6efd;
             color:white;border:none;border-radius:4px;font-size:13px;font-weight:500;
             cursor:pointer;transition:background 0.2s;white-space:nowrap;
         `;
@@ -649,10 +951,10 @@
             <svg style="width:16px;height:16px;margin-right:6px;vertical-align:middle" viewBox="0 0 24 24" fill="currentColor">
                 <path d="M12 14c1.66 0 3-1.34 3-3V5c0-1.66-1.34-3-3-3S9 3.34 9 5v6c0 1.66 1.34 3 3 3zm5.91-3c-.49 0-.9.36-.98.85C16.52 14.2 14.47 16 12 16s-4.52-1.8-4.93-4.15c-.08-.49-.49-.85-.98-.85-.61 0-1.09.54-1 1.14.49 3 2.89 5.35 5.91 5.78V20c0 .55.45 1 1 1s1-.45 1-1v-2.08c3.02-.43 5.42-2.78 5.91-5.78.1-.6-.39-1.14-1-1.14z"/>
             </svg>
-            Call Recordings
+            Recordings
         `;
         recordingsBtn.style.cssText = `
-            display:inline-flex;align-items:center;padding:8px 16px;background:#6c757d;
+            display:inline-flex;align-items:center;padding:8px 14px;background:#6c757d;
             color:white;border:none;border-radius:4px;font-size:13px;font-weight:500;
             cursor:pointer;transition:background 0.2s;white-space:nowrap;
         `;
@@ -660,9 +962,74 @@
         recordingsBtn.onmouseout = () => recordingsBtn.style.background = '#6c757d';
         recordingsBtn.onclick = () => showRecordings(module, recordId);
 
+        // Separator
+        const separator = document.createElement('span');
+        separator.style.cssText = 'width:1px;height:24px;background:#dee2e6;margin:0 4px;';
+
+        // Communication label
+        const commLabel = document.createElement('span');
+        commLabel.textContent = 'New:';
+        commLabel.style.cssText = 'font-size:12px;color:#6c757d;font-weight:600;text-transform:uppercase;letter-spacing:0.5px;margin-right:4px;';
+
+        // Call button
+        const callBtn = document.createElement('button');
+        callBtn.innerHTML = `
+            <svg style="width:16px;height:16px;margin-right:5px;vertical-align:middle" viewBox="0 0 24 24" fill="currentColor">
+                <path d="M6.62 10.79c1.44 2.83 3.76 5.14 6.59 6.59l2.2-2.2c.27-.27.67-.36 1.02-.24 1.12.37 2.33.57 3.57.57.55 0 1 .45 1 1V20c0 .55-.45 1-1 1-9.39 0-17-7.61-17-17 0-.55.45-1 1-1h3.5c.55 0 1 .45 1 1 0 1.25.2 2.45.57 3.57.11.35.03.74-.25 1.02l-2.2 2.2z"/>
+            </svg>
+            Call
+        `;
+        callBtn.style.cssText = `
+            display:inline-flex;align-items:center;padding:8px 14px;background:#198754;
+            color:white;border:none;border-radius:4px;font-size:13px;font-weight:500;
+            cursor:pointer;transition:background 0.2s;white-space:nowrap;
+        `;
+        callBtn.onmouseover = () => callBtn.style.background = '#157347';
+        callBtn.onmouseout = () => callBtn.style.background = '#198754';
+        callBtn.onclick = () => initiateCall(module, recordId);
+
+        // SMS button
+        const smsBtn = document.createElement('button');
+        smsBtn.innerHTML = `
+            <svg style="width:16px;height:16px;margin-right:5px;vertical-align:middle" viewBox="0 0 24 24" fill="currentColor">
+                <path d="M20 2H4c-1.1 0-2 .9-2 2v18l4-4h14c1.1 0 2-.9 2-2V4c0-1.1-.9-2-2-2zm0 14H6l-2 2V4h16v12z"/>
+            </svg>
+            SMS
+        `;
+        smsBtn.style.cssText = `
+            display:inline-flex;align-items:center;padding:8px 14px;background:#0dcaf0;
+            color:#000;border:none;border-radius:4px;font-size:13px;font-weight:500;
+            cursor:pointer;transition:background 0.2s;white-space:nowrap;
+        `;
+        smsBtn.onmouseover = () => smsBtn.style.background = '#0bb5d8';
+        smsBtn.onmouseout = () => smsBtn.style.background = '#0dcaf0';
+        smsBtn.onclick = () => showSmsCompose(module, recordId);
+
+        // Email button
+        const emailBtn = document.createElement('button');
+        emailBtn.innerHTML = `
+            <svg style="width:16px;height:16px;margin-right:5px;vertical-align:middle" viewBox="0 0 24 24" fill="currentColor">
+                <path d="M20 4H4c-1.1 0-2 .9-2 2v12c0 1.1.9 2 2 2h16c1.1 0 2-.9 2-2V6c0-1.1-.9-2-2-2zm0 4l-8 5-8-5V6l8 5 8-5v2z"/>
+            </svg>
+            Email
+        `;
+        emailBtn.style.cssText = `
+            display:inline-flex;align-items:center;padding:8px 14px;background:#6f42c1;
+            color:white;border:none;border-radius:4px;font-size:13px;font-weight:500;
+            cursor:pointer;transition:background 0.2s;white-space:nowrap;
+        `;
+        emailBtn.onmouseover = () => emailBtn.style.background = '#5a32a3';
+        emailBtn.onmouseout = () => emailBtn.style.background = '#6f42c1';
+        emailBtn.onclick = () => openEmailCompose(module, recordId);
+
         container.appendChild(label);
         container.appendChild(timelineBtn);
         container.appendChild(recordingsBtn);
+        container.appendChild(separator);
+        container.appendChild(commLabel);
+        container.appendChild(callBtn);
+        container.appendChild(smsBtn);
+        container.appendChild(emailBtn);
 
         return container;
     }
