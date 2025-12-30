@@ -73,6 +73,10 @@ class LeadJourney extends Basic {
         $campaigns = self::getCampaignResponses($parentType, $parentId);
         $timeline = array_merge($timeline, $campaigns);
 
+        // Get Notes (includes SMS messages)
+        $notes = self::getNotes($parentType, $parentId);
+        $timeline = array_merge($timeline, $notes);
+
         // Get Custom Touchpoints (from lead_journey table)
         $customTouchpoints = self::getCustomTouchpoints($parentType, $parentId);
         $timeline = array_merge($timeline, $customTouchpoints);
@@ -283,7 +287,52 @@ class LeadJourney extends Basic {
         
         return $campaigns;
     }
-    
+
+    /**
+     * Get notes for a record (includes SMS messages stored as Notes)
+     */
+    private static function getNotes($parentType, $parentId) {
+        global $db;
+
+        $query = "SELECT n.id, n.name, n.description, n.date_entered, n.date_modified
+                  FROM notes n
+                  WHERE n.parent_type = " . $db->quoted($parentType) . "
+                  AND n.parent_id = " . $db->quoted($parentId) . "
+                  AND n.deleted = 0
+                  ORDER BY n.date_entered DESC";
+
+        $result = $db->query($query);
+        $notes = array();
+
+        while ($row = $db->fetchByAssoc($result)) {
+            $name = $row['name'] ?? '';
+            $description = $row['description'] ?? '';
+
+            // Determine if this is an SMS based on the name pattern
+            $isSms = (stripos($name, 'SMS') !== false);
+            $isInbound = (stripos($name, 'from') !== false);
+
+            if ($isSms) {
+                $type = $isInbound ? 'sms_inbound' : 'sms_outbound';
+                $icon = 'sms';
+            } else {
+                $type = 'note';
+                $icon = 'circle';
+            }
+
+            $notes[] = array(
+                'id' => $row['id'],
+                'type' => $type,
+                'icon' => $icon,
+                'title' => $name,
+                'date' => $row['date_entered'],
+                'description' => $description,
+            );
+        }
+
+        return $notes;
+    }
+
     /**
      * Log a custom touchpoint
      */

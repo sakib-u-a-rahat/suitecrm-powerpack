@@ -241,6 +241,36 @@ foreach ($calls as $call) {
         if ($journeyId) {
             echo "    Created journey entry for {$leadName}: $journeyId\n";
             $synced++;
+
+            // Also create Call record in SuiteCRM Calls module (if not already exists)
+            $existingCallSql = "SELECT id FROM calls
+                                WHERE parent_type = 'Leads'
+                                AND parent_id = " . $db->quoted($lead['id']) . "
+                                AND description LIKE " . $db->quoted('%' . $callSid . '%') . "
+                                AND deleted = 0 LIMIT 1";
+            $existingCall = $db->getOne($existingCallSql);
+
+            if (!$existingCall) {
+                $callBean = BeanFactory::newBean('Calls');
+                $callBean->name = ($callDirection === 'inbound' ? 'Call from ' : 'Call to ') . $leadName;
+                $callBean->direction = ucfirst($callDirection);
+                $callBean->status = ($status === 'completed') ? 'Held' : 'Not Held';
+                $callBean->date_start = date('Y-m-d H:i:s', strtotime($startTime));
+                $callBean->date_end = date('Y-m-d H:i:s', strtotime($startTime) + $duration);
+                $callBean->duration_hours = floor($duration / 3600);
+                $callBean->duration_minutes = floor(($duration % 3600) / 60);
+                $callBean->parent_type = 'Leads';
+                $callBean->parent_id = $lead['id'];
+                $callBean->description = "Twilio Call SID: {$callSid}\n" .
+                    "From: {$from}\n" .
+                    "To: {$to}\n" .
+                    "Duration: " . floor($duration / 60) . "m " . ($duration % 60) . "s\n" .
+                    ($recordingUrl ? "Recording: {$recordingUrl}" : "");
+                $callBean->save();
+                echo "    Created call record: {$callBean->id}\n";
+            } else {
+                echo "    Call record already exists\n";
+            }
         }
     }
 

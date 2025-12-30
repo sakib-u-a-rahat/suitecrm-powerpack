@@ -1,7 +1,7 @@
 /**
  * LeadJourney Buttons for SuiteCRM 8 Angular Frontend
  * Injects Timeline and Recordings buttons into Lead/Contact detail views
- * v2.1.0 - Added type-based tabs and flat/threaded view modes
+ * v2.2.1 - Fixed recording URLs with legacy/ prefix
  */
 (function() {
     'use strict';
@@ -18,12 +18,14 @@
     let cachedTimelineData = null;
 
     // Type categories for filtering (includes legacy types without direction suffix)
+    // Note: verbacall_signup_sent and verbacall_payment_email_sent are also emails
     const TYPE_CATEGORIES = {
         all: { label: 'All', types: null },
         calls: { label: 'Calls', types: ['call_outbound', 'call_inbound', 'call', 'voicemail'] },
         sms: { label: 'SMS', types: ['sms_outbound', 'sms_inbound', 'sms'] },
-        emails: { label: 'Emails', types: ['email_outbound', 'email_inbound', 'email'] },
-        other: { label: 'Other', types: ['verbacall_signup_sent', 'verbacall_discount_offer', 'verbacall_payment_email_sent', 'note', 'meeting', 'task'] }
+        emails: { label: 'Emails', types: ['email_outbound', 'email_inbound', 'email', 'verbacall_signup_sent', 'verbacall_payment_email_sent'] },
+        verbacall: { label: 'Verbacall', types: ['verbacall_signup_sent', 'verbacall_discount_offer', 'verbacall_payment_email_sent'] },
+        other: { label: 'Other', types: ['note', 'meeting', 'task'] }
     };
 
     /**
@@ -83,7 +85,10 @@
             'email_outbound': '<svg viewBox="0 0 24 24" fill="currentColor" style="width:16px;height:16px"><path d="M20 4H4c-1.1 0-2 .9-2 2v12c0 1.1.9 2 2 2h16c1.1 0 2-.9 2-2V6c0-1.1-.9-2-2-2zm0 4l-8 5-8-5V6l8 5 8-5v2z"/></svg>',
             'email_inbound': '<svg viewBox="0 0 24 24" fill="currentColor" style="width:16px;height:16px"><path d="M20 4H4c-1.1 0-2 .9-2 2v12c0 1.1.9 2 2 2h16c1.1 0 2-.9 2-2V6c0-1.1-.9-2-2-2zm0 14H4V8l8 5 8-5v10zm-8-7L4 6h16l-8 5z"/></svg>',
             'email': '<svg viewBox="0 0 24 24" fill="currentColor" style="width:16px;height:16px"><path d="M20 4H4c-1.1 0-2 .9-2 2v12c0 1.1.9 2 2 2h16c1.1 0 2-.9 2-2V6c0-1.1-.9-2-2-2zm0 4l-8 5-8-5V6l8 5 8-5v2z"/></svg>',
-            'voicemail': '<svg viewBox="0 0 24 24" fill="currentColor" style="width:16px;height:16px"><path d="M18.5 6C15.46 6 13 8.46 13 11.5c0 1.33.47 2.55 1.26 3.5H9.74c.79-.95 1.26-2.17 1.26-3.5C11 8.46 8.54 6 5.5 6S0 8.46 0 11.5 2.46 17 5.5 17h13c3.04 0 5.5-2.46 5.5-5.5S21.54 6 18.5 6zm-13 9C3.57 15 2 13.43 2 11.5S3.57 8 5.5 8 9 9.57 9 11.5 7.43 15 5.5 15zm13 0c-1.93 0-3.5-1.57-3.5-3.5S16.57 8 18.5 8 22 9.57 22 11.5 20.43 15 18.5 15z"/></svg>'
+            'voicemail': '<svg viewBox="0 0 24 24" fill="currentColor" style="width:16px;height:16px"><path d="M18.5 6C15.46 6 13 8.46 13 11.5c0 1.33.47 2.55 1.26 3.5H9.74c.79-.95 1.26-2.17 1.26-3.5C11 8.46 8.54 6 5.5 6S0 8.46 0 11.5 2.46 17 5.5 17h13c3.04 0 5.5-2.46 5.5-5.5S21.54 6 18.5 6zm-13 9C3.57 15 2 13.43 2 11.5S3.57 8 5.5 8 9 9.57 9 11.5 7.43 15 5.5 15zm13 0c-1.93 0-3.5-1.57-3.5-3.5S16.57 8 18.5 8 22 9.57 22 11.5 20.43 15 18.5 15z"/></svg>',
+            'verbacall_signup_sent': '<svg viewBox="0 0 24 24" fill="currentColor" style="width:16px;height:16px"><path d="M15 12c2.21 0 4-1.79 4-4s-1.79-4-4-4-4 1.79-4 4 1.79 4 4 4zm-9-2V7H4v3H1v2h3v3h2v-3h3v-2H6zm9 4c-2.67 0-8 1.34-8 4v2h16v-2c0-2.66-5.33-4-8-4z"/></svg>',
+            'verbacall_discount_offer': '<svg viewBox="0 0 24 24" fill="currentColor" style="width:16px;height:16px"><path d="M21.41 11.58l-9-9C12.05 2.22 11.55 2 11 2H4c-1.1 0-2 .9-2 2v7c0 .55.22 1.05.59 1.42l9 9c.36.36.86.58 1.41.58.55 0 1.05-.22 1.41-.59l7-7c.37-.36.59-.86.59-1.41 0-.55-.23-1.06-.59-1.42zM5.5 7C4.67 7 4 6.33 4 5.5S4.67 4 5.5 4 7 4.67 7 5.5 6.33 7 5.5 7z"/></svg>',
+            'verbacall_payment_email_sent': '<svg viewBox="0 0 24 24" fill="currentColor" style="width:16px;height:16px"><path d="M20 4H4c-1.11 0-1.99.89-1.99 2L2 18c0 1.11.89 2 2 2h16c1.11 0 2-.89 2-2V6c0-1.11-.89-2-2-2zm0 14H4v-6h16v6zm0-10H4V6h16v2z"/></svg>'
         };
         return icons[type] || '<svg viewBox="0 0 24 24" fill="currentColor" style="width:16px;height:16px"><path d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm-2 15l-5-5 1.41-1.41L10 14.17l7.59-7.59L19 8l-9 9z"/></svg>';
     }
@@ -279,20 +284,53 @@
     }
 
     /**
+     * Fix recording URL to include legacy/ prefix
+     */
+    function fixRecordingUrl(url) {
+        if (!url) return null;
+        // Add legacy/ prefix if URL starts with index.php
+        if (url.startsWith('index.php')) {
+            return 'legacy/' + url;
+        }
+        return url;
+    }
+
+    /**
      * Render single timeline entry
      */
     function renderEntry(entry) {
         const touchpointData = entry.touchpoint_data || {};
         let details = '';
+        let extraInfo = '';
+        const recordingUrl = fixRecordingUrl(entry.recording_url);
 
-        if (touchpointData.discount_url) {
-            details = `<a href="${touchpointData.discount_url}" target="_blank" style="color:#0d6efd;">View Offer Link</a>`;
-        }
-        if (touchpointData.duration) {
-            details = `Duration: ${touchpointData.duration}s`;
-        }
-        if (entry.recording_url) {
-            details += ` <a href="${entry.recording_url}" target="_blank" style="color:#198754;margin-left:8px;">Play Recording</a>`;
+        // Handle Verbacall-specific details
+        if (entry.touchpoint_type === 'verbacall_signup_sent') {
+            if (touchpointData.signup_url) {
+                details = `<a href="${touchpointData.signup_url}" target="_blank" style="color:#fd7e14;font-weight:500;">Open Signup Link</a>`;
+            }
+            if (touchpointData.sent_to) {
+                extraInfo = `<div style="font-size: 11px; color: #6c757d; margin-top: 4px;">Sent to: ${touchpointData.sent_to}</div>`;
+            }
+        } else if (entry.touchpoint_type === 'verbacall_discount_offer') {
+            if (touchpointData.discount_url) {
+                details = `<a href="${touchpointData.discount_url}" target="_blank" style="color:#fd7e14;font-weight:500;">View Discount Offer</a>`;
+            }
+            if (touchpointData.discount_percentage) {
+                extraInfo = `<div style="font-size: 11px; color: #198754; margin-top: 4px;"><strong>${touchpointData.discount_percentage}% discount</strong>${touchpointData.expiry_days ? ` • Expires in ${touchpointData.expiry_days} days` : ''}</div>`;
+            }
+        } else if (entry.touchpoint_type === 'verbacall_payment_email_sent') {
+            if (touchpointData.payment_url) {
+                details = `<a href="${touchpointData.payment_url}" target="_blank" style="color:#fd7e14;font-weight:500;">View Payment Link</a>`;
+            }
+        } else {
+            // Standard handling for calls/SMS/emails
+            if (touchpointData.duration) {
+                details = `Duration: ${touchpointData.duration}s`;
+            }
+            if (recordingUrl) {
+                details += ` <a href="${recordingUrl}" target="_blank" style="color:#198754;margin-left:8px;">Play Recording</a>`;
+            }
         }
 
         const typeColor = getTypeColor(entry.touchpoint_type);
@@ -310,6 +348,7 @@
                 </div>
                 ${entry.name ? `<div style="font-size: 13px; color: #495057; margin-bottom: 4px;">${entry.name}</div>` : ''}
                 ${entry.description ? `<div style="font-size: 12px; color: #6c757d;">${entry.description}</div>` : ''}
+                ${extraInfo}
                 ${details ? `<div style="font-size: 12px; margin-top: 6px;">${details}</div>` : ''}
             </div>
         `;
@@ -365,7 +404,7 @@
                                         </span>
                                     </div>
                                     ${entry.name ? `<div style="font-size: 12px; color: #6c757d;">${entry.name}</div>` : ''}
-                                    ${entry.recording_url ? `<a href="${entry.recording_url}" target="_blank" style="font-size: 11px; color: #198754;">Play Recording</a>` : ''}
+                                    ${entry.recording_url ? `<a href="${fixRecordingUrl(entry.recording_url)}" target="_blank" style="font-size: 11px; color: #198754;">Play Recording</a>` : ''}
                                 </div>
                             `).join('')}
                         </div>
@@ -553,7 +592,7 @@
                             </div>
                         </div>
                         <div style="padding:12px 16px;">
-                            <audio controls style="width:100%;" src="${rec.recording_url}">
+                            <audio controls style="width:100%;" src="${fixRecordingUrl(rec.recording_url)}">
                                 Your browser does not support audio playback.
                             </audio>
                         </div>
